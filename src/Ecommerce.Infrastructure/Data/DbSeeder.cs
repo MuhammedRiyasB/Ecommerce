@@ -5,14 +5,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
 
 namespace Ecommerce.Infrastructure.Data
 {
     /// <summary>
-    /// Seeds the database with initial data (e.g., admin user).
+    /// Seeds the database with initial data: admin user and clothing category hierarchy.
+    /// Designed for idempotent execution — safe to run multiple times without duplicates.
     /// </summary>
     public static class DbSeeder
     {
+        /// <summary>
+        /// Seeds the default admin user from configuration.
+        /// </summary>
         public static async Task SeedAdminAsync(IServiceProvider serviceProvider)
         {
             using var scope = serviceProvider.CreateScope();
@@ -48,6 +53,97 @@ namespace Ecommerce.Infrastructure.Data
             context.Users.Add(admin);
             await context.SaveChangesAsync();
             logger.LogInformation("Admin user seeded successfully with email: {Email}", adminEmail);
+        }
+
+        /// <summary>
+        /// Seeds the complete men's clothing category hierarchy.
+        /// Creates 4 root categories and 19 subcategories (23 total).
+        /// Idempotent — skips seeding if categories already exist.
+        /// </summary>
+        public static async Task SeedCategoriesAsync(IServiceProvider serviceProvider)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
+
+            // Skip if categories are already seeded
+            if (await context.Categories.AnyAsync())
+            {
+                logger.LogInformation("Categories already seeded. Skipping category seed.");
+                return;
+            }
+
+            // Define the complete clothing category hierarchy
+            // Structure: Root Category -> Subcategories
+            var categoryTree = new Dictionary<string, List<string>>
+            {
+                ["Top Wear"] = new() { "T-Shirts", "Shirts", "Hoodies", "Sweatshirts", "Jackets" },
+                ["Bottom Wear"] = new() { "Jeans", "Cargo Pants", "Joggers", "Trousers", "Shorts" },
+                ["Winter Wear"] = new() { "Hoodies", "Jackets", "Sweaters", "Thermals" },
+                ["Innerwear"] = new() { "Boxers", "Briefs", "Vests", "Thermals" }
+            };
+
+            int rootOrder = 1;
+
+            foreach (var (rootName, subCategories) in categoryTree)
+            {
+                var rootSlug = GenerateSlug(rootName);
+
+                // Create root category (e.g., "Top Wear")
+                var rootCategory = new Category
+                {
+                    CategoryName = rootName,
+                    Slug = rootSlug,
+                    Description = $"Men's {rootName} — browse our complete collection.",
+                    DisplayOrder = rootOrder++,
+                    IsActive = true,
+                    ParentCategoryId = null
+                };
+
+                context.Categories.Add(rootCategory);
+
+                // Flush to get the auto-generated CategoryId for FK references
+                await context.SaveChangesAsync();
+
+                int childOrder = 1;
+
+                // Create subcategories under this root (e.g., "T-Shirts" under "Top Wear")
+                foreach (var subName in subCategories)
+                {
+                    var subSlug = $"{rootSlug}/{GenerateSlug(subName)}";
+
+                    var subCategory = new Category
+                    {
+                        CategoryName = subName,
+                        Slug = subSlug,
+                        Description = $"Men's {subName} — shop the latest styles.",
+                        DisplayOrder = childOrder++,
+                        IsActive = true,
+                        ParentCategoryId = rootCategory.CategoryId
+                    };
+
+                    context.Categories.Add(subCategory);
+                }
+
+                await context.SaveChangesAsync();
+            }
+
+            logger.LogInformation(
+                "Category hierarchy seeded successfully. Total categories: {Count}",
+                await context.Categories.CountAsync());
+        }
+
+        /// <summary>
+        /// Generates a URL-friendly slug from a category name.
+        /// Example: "Cargo Pants" -> "cargo-pants", "T-Shirts" -> "t-shirts"
+        /// </summary>
+        private static string GenerateSlug(string name)
+        {
+            var slug = name.ToLowerInvariant();
+            slug = Regex.Replace(slug, @"[^a-z0-9\s-]", "");  // Remove special chars
+            slug = Regex.Replace(slug, @"\s+", "-");            // Spaces to hyphens
+            slug = Regex.Replace(slug, @"-+", "-");             // Collapse multiple hyphens
+            return slug.Trim('-');
         }
     }
 }

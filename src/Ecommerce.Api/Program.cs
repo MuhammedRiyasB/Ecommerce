@@ -173,5 +173,6 @@ app.MapHealthChecks("/health");
 
 // ===================== Database Seeding =====================
 await DbSeeder.SeedAdminAsync(app.Services);
+await DbSeeder.SeedCategoriesAsync(app.Services);
 
 app.Run();

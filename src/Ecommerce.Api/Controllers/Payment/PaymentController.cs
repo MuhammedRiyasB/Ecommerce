@@ -1,4 +1,3 @@
-using Ecommerce.Application.DTOs.Payment;
 using Ecommerce.Application.Interfaces.Payment;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,17 +14,27 @@ namespace Ecommerce.Api.Controllers.Payment
         private readonly IPaymentGatewayService _paymentGatewayService;
         public PaymentController(IPaymentGatewayService paymentGatewayService) => _paymentGatewayService = paymentGatewayService;
 
-        [HttpPost("create-order")]
-        public async Task<IActionResult> CreateOrder([FromBody] int price)
+        /// <summary>
+        /// Creates a Stripe PaymentIntent for the given amount.
+        /// Returns a client_secret which the frontend uses to render Stripe Elements.
+        /// </summary>
+        [HttpPost("create-intent")]
+        public async Task<IActionResult> CreatePaymentIntent([FromBody] decimal amount)
         {
-            var result = await _paymentGatewayService.CreatePaymentOrderAsync(price);
+            var result = await _paymentGatewayService.CreatePaymentIntentAsync(amount);
             return StatusCode(result.StatusCode, result);
         }
 
+        /// <summary>
+        /// Verifies a payment's success via its PaymentIntent ID.
+        /// </summary>
         [HttpPost("verify")]
-        public async Task<IActionResult> VerifyPayment([FromBody] RazorPayVerificationDto paymentDto)
+        public async Task<IActionResult> VerifyPayment([FromBody] string paymentIntentId)
         {
-            var result = await _paymentGatewayService.VerifyPaymentAsync(paymentDto);
+            if (string.IsNullOrWhiteSpace(paymentIntentId))
+                return BadRequest(new { message = "PaymentIntentId is required." });
+
+            var result = await _paymentGatewayService.VerifyPaymentAsync(paymentIntentId);
             return StatusCode(result.StatusCode, result);
         }
     }

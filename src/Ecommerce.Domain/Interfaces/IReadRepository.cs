@@ -7,6 +7,7 @@ namespace Ecommerce.Domain.Interfaces
     /// </summary>
     public interface IReadRepository<T> where T : class
     {
+    
         IQueryable<T> Query();
         Task<T?> GetByIdAsync(Guid id);
         Task<List<T>> GetAllAsync();

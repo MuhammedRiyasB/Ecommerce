@@ -9,7 +9,8 @@ using Asp.Versioning;
 namespace Ecommerce.Api.Controllers.Admin
 {
     /// <summary>
-    /// Admin operations — split into user management and category management endpoints.
+    /// Admin operations — user management and category management endpoints.
+    /// All endpoints require Admin role unless explicitly marked [AllowAnonymous].
     /// </summary>
     [ApiController]
     [ApiVersion("1.0")]
@@ -26,7 +27,7 @@ namespace Ecommerce.Api.Controllers.Admin
             _categoryService = categoryService;
         }
 
-        // === User Management ===
+        // ==================== User Management ====================
 
         [HttpGet("users")]
         public async Task<IActionResult> GetAllUsers([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
@@ -39,8 +40,11 @@ namespace Ecommerce.Api.Controllers.Admin
             return Ok(new { message = isBlocked ? "User blocked" : "User unblocked" });
         }
 
-        // === Category Management ===
+        // ==================== Category Management ====================
 
+        /// <summary>
+        /// Creates a new category. Set ParentCategoryId to create a subcategory.
+        /// </summary>
         [HttpPost("categories")]
         public async Task<IActionResult> AddCategory([FromBody] CreateCategoryRequestDto dto)
         {
@@ -49,9 +53,43 @@ namespace Ecommerce.Api.Controllers.Admin
             return Ok(new { message });
         }
 
+        /// <summary>
+        /// Returns all categories as a flat list (for admin dropdowns).
+        /// </summary>
         [HttpGet("categories")]
         [AllowAnonymous]
         public async Task<IActionResult> GetAllCategories()
             => Ok(await _categoryService.GetAllCategoriesAsync());
+
+        /// <summary>
+        /// Returns the complete category hierarchy as a nested tree.
+        /// Used by the storefront for navigation menus.
+        /// </summary>
+        [HttpGet("categories/tree")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetCategoryTree()
+            => Ok(await _categoryService.GetCategoryTreeAsync());
+
+        /// <summary>
+        /// Returns a specific category by its URL-friendly slug.
+        /// Includes immediate subcategories in the response.
+        /// </summary>
+        [HttpGet("categories/slug/{*slug}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetCategoryBySlug(string slug)
+        {
+            var category = await _categoryService.GetCategoryBySlugAsync(slug);
+            return category == null
+                ? NotFound(new { message = $"Category with slug '{slug}' not found." })
+                : Ok(category);
+        }
+
+        /// <summary>
+        /// Returns immediate subcategories of a parent category.
+        /// </summary>
+        [HttpGet("categories/{parentId}/subcategories")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetSubCategories(int parentId)
+            => Ok(await _categoryService.GetSubCategoriesAsync(parentId));
     }
 }

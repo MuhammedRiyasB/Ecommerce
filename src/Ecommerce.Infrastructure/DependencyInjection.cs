@@ -27,7 +27,7 @@ namespace Ecommerce.Infrastructure
 
             // External Services (Infrastructure implementations of Application interfaces)
             services.AddScoped<ICloudImageService, CloudinaryImageService>();
-            services.AddScoped<IPaymentGatewayService, RazorPayGatewayService>();
+            services.AddScoped<IPaymentGatewayService, StripeGatewayService>();
 
             return services;
         }

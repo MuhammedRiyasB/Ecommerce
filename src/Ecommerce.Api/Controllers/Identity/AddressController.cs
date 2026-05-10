@@ -36,6 +36,7 @@ namespace Ecommerce.Api.Controllers.Identity
         public async Task<IActionResult> GetAllAddresses([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
             => Ok(await _addressService.GetAllAddressesAsync(GetUserId(), pageNumber, pageSize));
 
+
         [HttpDelete("{addressId}")]
         public async Task<IActionResult> DeleteAddress(Guid addressId)
         {

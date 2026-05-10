@@ -76,6 +76,7 @@ namespace Ecommerce.Application.Services.Orders
             if (cart == null || cart.CartItems == null || !cart.CartItems.Any())
                 throw new ArgumentException("Your cart is empty");
 
+            // Calculate server-side total using decimal pricing
             var serverTotalPrice = cart.CartItems.Sum(c => c.Quantity * c.Product.Price);
 
             var order = CreateOrderFromCart(userId, dto, cart, serverTotalPrice);
@@ -98,7 +99,11 @@ namespace Ecommerce.Application.Services.Orders
             return true;
         }
 
-        private static Order CreateOrderFromCart(Guid userId, CreateOrderRequestDto dto, Domain.Entities.Cart cart, int serverTotalPrice)
+        /// <summary>
+        /// Builds an Order entity from the user's cart contents.
+        /// Captures current product prices as UnitPrice for historical accuracy.
+        /// </summary>
+        private static Order CreateOrderFromCart(Guid userId, CreateOrderRequestDto dto, Domain.Entities.Cart cart, decimal serverTotalPrice)
         {
             return new Order
             {
@@ -167,8 +172,9 @@ namespace Ecommerce.Application.Services.Orders
 
         public async Task<RevenueResponseDto> GetRevenueAsync()
         {
-            var revenue = (int)await _orderItemRepo.Query().SumAsync(oi => (decimal)oi.TotalPrice);
-            var itemsSold = (int)await _orderItemRepo.Query().SumAsync(oi => (decimal)oi.Quantity);
+            // Aggregate revenue using decimal — no lossy int casts
+            var revenue = await _orderItemRepo.Query().SumAsync(oi => oi.TotalPrice);
+            var itemsSold = await _orderItemRepo.Query().SumAsync(oi => oi.Quantity);
 
             return new RevenueResponseDto
             {
@@ -177,19 +183,22 @@ namespace Ecommerce.Application.Services.Orders
             };
         }
 
+        /// <summary>
+        /// Maps an Order entity to its response DTO with decimal pricing.
+        /// </summary>
         private OrderDetailsResponseDto MapOrderToDetailsDto(Order o)
         {
             return new OrderDetailsResponseDto
             {
-                OrderId = o.OrderId, OrderDate = o.OrderDate, TotalPrice = (int)o.TotalPrice,
+                OrderId = o.OrderId, OrderDate = o.OrderDate, TotalPrice = o.TotalPrice,
                 OrderStatus = o.OrderStatus.ToString(), TransactionId = o.TransactionId,
                 Address = _mapper.Map<AddressResponseDto>(o.Address),
                 OrderItems = o.OrderItems.Select(item => new OrderItemResponseDto
                 {
                     OrderItemId = item.OrderItemId, ProductId = item.ProductId,
                     ProductName = item.Product.ProductName, ImageUrl = item.Product.Image,
-                    Price = item.Product.Price, Quantity = item.Quantity,
-                    TotalAmount = item.Quantity * item.Product.Price
+                    Price = item.UnitPrice, Quantity = item.Quantity,
+                    TotalAmount = item.TotalPrice
                 }).ToList()
             };
         }

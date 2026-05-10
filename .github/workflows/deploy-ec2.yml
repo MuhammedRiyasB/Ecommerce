@@ -70,4 +70,6 @@ jobs:
               -e "CloudinarySettings__ApiKey=${{ secrets.CLOUDINARY_API_KEY }}" \
               -e "CloudinarySettings__ApiSecret=${{ secrets.CLOUDINARY_API_SECRET }}" \
               -e "Jwt__Key=${{ secrets.JWT_SECRET_KEY }}" \
+              -e "AdminSettings__Email=${{ secrets.ADMIN_EMAIL }}" \
+              -e "AdminSettings__Password=${{ secrets.ADMIN_PASSWORD }}" \
               ${{ secrets.DOCKER_USERNAME }}/ecommerce-api:latest

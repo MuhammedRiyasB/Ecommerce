@@ -25,6 +25,9 @@ namespace Ecommerce.Infrastructure.Data
             var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
 
+            // Apply any pending migrations to create tables in the database
+            await context.Database.MigrateAsync();
+
             var adminEmail = configuration["AdminSettings:Email"];
             var adminPassword = configuration["AdminSettings:Password"];
 

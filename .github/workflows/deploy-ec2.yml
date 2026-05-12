@@ -85,6 +85,10 @@ jobs:
               sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || true
             fi
             
+            # Clean up old standalone container to free up port 80
+            sudo docker stop ecommerce-api || true
+            sudo docker rm ecommerce-api || true
+            
             # Pull the latest images and start containers
             # Fallback to older docker-compose if modern plugin is missing
             if sudo docker --help | grep -q "compose"; then

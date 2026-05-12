@@ -1,0 +1,296 @@
+using AutoMapper;
+using Ecommerce.Application.DTOs.Orders;
+using Ecommerce.Application.Services.Orders;
+using Ecommerce.Domain.Entities;
+using Ecommerce.Domain.Enums;
+using Ecommerce.Domain.Interfaces;
+using FluentAssertions;
+using MockQueryable.Moq;
+using Moq;
+
+namespace Ecommerce.UnitTests.Services;
+
+/// <summary>
+/// Unit tests for OrderService — covers order placement, idempotency guard,
+/// stock deduction, cart cleanup, status changes, and access control.
+/// </summary>
+public class OrderServiceTests
+{
+    private readonly Mock<IRepository<Order>> _orderRepoMock;
+    private readonly Mock<IRepository<Domain.Entities.Cart>> _cartRepoMock;
+    private readonly Mock<IRepository<CartItem>> _cartItemRepoMock;
+    private readonly Mock<IRepository<Product>> _productRepoMock;
+    private readonly Mock<IRepository<Address>> _addressRepoMock;
+    private readonly Mock<IRepository<OrderItem>> _orderItemRepoMock;
+    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IMapper> _mapperMock;
+    private readonly OrderService _sut;
+
+    public OrderServiceTests()
+    {
+        _orderRepoMock = new Mock<IRepository<Order>>();
+        _cartRepoMock = new Mock<IRepository<Domain.Entities.Cart>>();
+        _cartItemRepoMock = new Mock<IRepository<CartItem>>();
+        _productRepoMock = new Mock<IRepository<Product>>();
+        _addressRepoMock = new Mock<IRepository<Address>>();
+        _orderItemRepoMock = new Mock<IRepository<OrderItem>>();
+        _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _mapperMock = new Mock<IMapper>();
+
+        _sut = new OrderService(
+            _orderRepoMock.Object,
+            _cartRepoMock.Object,
+            _cartItemRepoMock.Object,
+            _productRepoMock.Object,
+            _addressRepoMock.Object,
+            _orderItemRepoMock.Object,
+            _unitOfWorkMock.Object,
+            _mapperMock.Object);
+    }
+
+    private static Guid SetupUserId() => Guid.NewGuid();
+
+    /// <summary>
+    /// Creates a full test scenario with user, address, cart, and products ready for ordering.
+    /// </summary>
+    private (Guid UserId, Guid AddressId, Product Product) SetupValidOrderScenario()
+    {
+        var userId = Guid.NewGuid();
+        var addressId = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(), ProductName = "Test Shirt", Price = 500, Quantity = 10,
+            Image = "https://test.com/img.jpg"
+        };
+
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
+        var cartItem = new CartItem { Id = Guid.NewGuid(), ProductId = product.Id, Quantity = 2, Product = product };
+        var cart = new Domain.Entities.Cart
+        {
+            CartId = Guid.NewGuid(), UserId = userId,
+            CartItems = new List<CartItem> { cartItem }
+        };
+
+        // Setup mocks for all repositories
+        var emptyOrders = new List<Order>().AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(emptyOrders);
+
+        var addresses = new List<Address> { address }.AsQueryable().BuildMock();
+        _addressRepoMock.Setup(r => r.Query()).Returns(addresses);
+
+        var carts = new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock();
+        _cartRepoMock.Setup(r => r.Query()).Returns(carts);
+
+        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync()).Returns(Task.CompletedTask);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+        _unitOfWorkMock.Setup(u => u.CommitAsync()).Returns(Task.CompletedTask);
+
+        return (userId, addressId, product);
+    }
+
+    // ==================== CreateOrder Tests ====================
+
+    [Fact]
+    public async Task CreateOrderAsync_ValidCart_PlacesOrder()
+    {
+        // Arrange
+        var (userId, addressId, _) = SetupValidOrderScenario();
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_001" };
+
+        // Act
+        var result = await _sut.CreateOrderAsync(userId, dto);
+
+        // Assert
+        result.Should().BeTrue();
+        _orderRepoMock.Verify(r => r.AddAsync(It.IsAny<Order>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_DuplicateTransactionId_ThrowsException()
+    {
+        // Arrange — an order with this TransactionId already exists (idempotency check)
+        var existingOrder = new Order { OrderId = Guid.NewGuid(), TransactionId = "TXN_DUPLICATE" };
+        var orders = new List<Order> { existingOrder }.AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(orders);
+
+        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_DUPLICATE" };
+
+        // Act & Assert
+        var act = () => _sut.CreateOrderAsync(Guid.NewGuid(), dto);
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*transaction ID already exists*");
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_InvalidAddress_ThrowsException()
+    {
+        // Arrange — address doesn't exist
+        var emptyOrders = new List<Order>().AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(emptyOrders);
+
+        var emptyAddresses = new List<Address>().AsQueryable().BuildMock();
+        _addressRepoMock.Setup(r => r.Query()).Returns(emptyAddresses);
+
+        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_002" };
+
+        // Act & Assert
+        var act = () => _sut.CreateOrderAsync(Guid.NewGuid(), dto);
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Cannot find the address*");
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_EmptyCart_ThrowsException()
+    {
+        // Arrange — address exists but cart is empty
+        var userId = Guid.NewGuid();
+        var addressId = Guid.NewGuid();
+
+        var emptyOrders = new List<Order>().AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(emptyOrders);
+
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
+        var addresses = new List<Address> { address }.AsQueryable().BuildMock();
+        _addressRepoMock.Setup(r => r.Query()).Returns(addresses);
+
+        // Empty cart
+        var emptyCarts = new List<Domain.Entities.Cart>().AsQueryable().BuildMock();
+        _cartRepoMock.Setup(r => r.Query()).Returns(emptyCarts);
+
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_003" };
+
+        // Act & Assert
+        var act = () => _sut.CreateOrderAsync(userId, dto);
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*cart is empty*");
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_InsufficientStock_ThrowsException()
+    {
+        // Arrange — product has only 1 in stock but cart has 5
+        var userId = Guid.NewGuid();
+        var addressId = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(), ProductName = "Low Stock Shirt", Price = 500,
+            Quantity = 1, Image = "img.jpg" // Only 1 available
+        };
+
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
+        var cartItem = new CartItem { Id = Guid.NewGuid(), ProductId = product.Id, Quantity = 5, Product = product };
+        var cart = new Domain.Entities.Cart
+        {
+            CartId = Guid.NewGuid(), UserId = userId,
+            CartItems = new List<CartItem> { cartItem }
+        };
+
+        var emptyOrders = new List<Order>().AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(emptyOrders);
+
+        var addresses = new List<Address> { address }.AsQueryable().BuildMock();
+        _addressRepoMock.Setup(r => r.Query()).Returns(addresses);
+
+        var carts = new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock();
+        _cartRepoMock.Setup(r => r.Query()).Returns(carts);
+
+        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync()).Returns(Task.CompletedTask);
+        _unitOfWorkMock.Setup(u => u.RollbackAsync()).Returns(Task.CompletedTask);
+
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_004" };
+
+        // Act & Assert
+        var act = () => _sut.CreateOrderAsync(userId, dto);
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*out of stock*");
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_DeductsStockQuantity()
+    {
+        // Arrange
+        var (userId, addressId, product) = SetupValidOrderScenario();
+        var originalStock = product.Quantity; // 10
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_005" };
+
+        // Act
+        await _sut.CreateOrderAsync(userId, dto);
+
+        // Assert — stock should be reduced (original 10, ordered 2 = 8 remaining)
+        product.Quantity.Should().BeLessThan(originalStock);
+        _productRepoMock.Verify(r => r.Update(product), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_ClearsCartItems()
+    {
+        // Arrange
+        var (userId, addressId, _) = SetupValidOrderScenario();
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_006" };
+
+        // Act
+        await _sut.CreateOrderAsync(userId, dto);
+
+        // Assert — cart items must be removed after order placement
+        _cartItemRepoMock.Verify(r => r.RemoveRange(It.IsAny<IEnumerable<CartItem>>()), Times.Once);
+    }
+
+    // ==================== ChangeOrderStatus Tests ====================
+
+    [Fact]
+    public async Task ChangeOrderStatusAsync_ValidStatus_Updates()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var order = new Order { OrderId = orderId, OrderStatus = OrderStatus.Pending };
+        var orders = new List<Order> { order }.AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(orders);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.ChangeOrderStatusAsync(orderId, "Shipped");
+
+        // Assert
+        result.OrderStatus.Should().Be("Shipped");
+        result.Message.Should().Contain("updated successfully");
+    }
+
+    [Fact]
+    public async Task ChangeOrderStatusAsync_InvalidStatus_ReturnsInvalidMessage()
+    {
+        // Arrange — "Flying" is not a valid OrderStatus enum value
+        // Act
+        var result = await _sut.ChangeOrderStatusAsync(Guid.NewGuid(), "Flying");
+
+        // Assert
+        result.Message.Should().Be("invalidstatus");
+    }
+
+    // ==================== GetOrderById Access Control ====================
+
+    [Fact]
+    public async Task GetOrderByIdAsync_NonAdmin_WrongUser_ThrowsUnauthorized()
+    {
+        // Arrange — order belongs to User A, but User B (non-admin) tries to access it
+        var orderId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var requestingUserId = Guid.NewGuid(); // Different user
+
+        var order = new Order
+        {
+            OrderId = orderId, UserId = ownerUserId, OrderStatus = OrderStatus.Pending,
+            TotalPrice = 1000, TransactionId = "TXN_ACCESS",
+            OrderItems = new List<OrderItem>(),
+            Address = new Address { AddressId = Guid.NewGuid() }
+        };
+
+        var orders = new List<Order> { order }.AsQueryable().BuildMock();
+        _orderRepoMock.Setup(r => r.Query()).Returns(orders);
+
+        // Act & Assert — non-admin accessing another user's order
+        var act = () => _sut.GetOrderByIdAsync(orderId, requestingUserId, isAdmin: false);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*not authorized*");
+    }
+}

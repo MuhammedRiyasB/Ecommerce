@@ -78,5 +78,11 @@ jobs:
             EOF
             
             # Pull the latest images and start containers
-            sudo docker compose pull
-            sudo docker compose up -d --remove-orphans
+            # Fallback to older docker-compose if modern plugin is missing
+            if sudo docker --help | grep -q "compose"; then
+              sudo docker compose pull
+              sudo docker compose up -d --remove-orphans
+            else
+              sudo docker-compose pull
+              sudo docker-compose up -d --remove-orphans
+            fi

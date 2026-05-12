@@ -137,8 +137,16 @@ builder.Services.AddResponseCompression(options =>
 });
 
 // ===================== Health Checks =====================
-builder.Services.AddHealthChecks()
-    .AddSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")!);
+var healthChecks = builder.Services.AddHealthChecks();
+
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        healthChecks.AddSqlServer(connectionString);
+    }
+}
 
 // ===================== Controllers & Swagger =====================
 builder.Services.AddControllers();

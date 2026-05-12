@@ -16,6 +16,22 @@ namespace Ecommerce.Infrastructure.Data
     public static class DbSeeder
     {
         /// <summary>
+        /// Ensures the database is initialized for the active provider.
+        /// Relational providers use migrations, while test-only providers such as
+        /// EF InMemory fall back to EnsureCreated to avoid relational API failures.
+        /// </summary>
+        private static async Task EnsureDatabaseReadyAsync(AppDbContext context)
+        {
+            if (context.Database.IsRelational())
+            {
+                await context.Database.MigrateAsync();
+                return;
+            }
+
+            await context.Database.EnsureCreatedAsync();
+        }
+
+        /// <summary>
         /// Seeds the default admin user from configuration.
         /// </summary>
         public static async Task SeedAdminAsync(IServiceProvider serviceProvider)
@@ -25,8 +41,9 @@ namespace Ecommerce.Infrastructure.Data
             var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
 
-            // Apply any pending migrations to create tables in the database
-            await context.Database.MigrateAsync();
+            // Initialize the database in a provider-safe way so both production
+            // SQL Server and test-only in-memory providers can seed correctly.
+            await EnsureDatabaseReadyAsync(context);
 
             var adminEmail = configuration["AdminSettings:Email"];
             var adminPassword = configuration["AdminSettings:Password"];
@@ -68,6 +85,8 @@ namespace Ecommerce.Infrastructure.Data
             using var scope = serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
+
+            await EnsureDatabaseReadyAsync(context);
 
             // Skip if categories are already seeded
             if (await context.Categories.AnyAsync())

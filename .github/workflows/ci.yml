@@ -28,10 +28,10 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Run Unit Tests
-        run: dotnet test tests/Ecommerce.UnitTests/Ecommerce.UnitTests.csproj --configuration Release --no-build --logger "trx" --results-directory "TestResults/Unit"
+        run: dotnet test tests/Ecommerce.UnitTests/Ecommerce.UnitTests.csproj --configuration Release --logger "trx" --results-directory "TestResults/Unit"
 
       - name: Run Integration Tests
-        run: dotnet test tests/Ecommerce.IntegrationTests/Ecommerce.IntegrationTests.csproj --configuration Release --no-build --logger "trx" --results-directory "TestResults/Integration"
+        run: dotnet test tests/Ecommerce.IntegrationTests/Ecommerce.IntegrationTests.csproj --configuration Release --logger "trx" --results-directory "TestResults/Integration"
 
       - name: Publish Test Results
         if: always()

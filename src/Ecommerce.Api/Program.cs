@@ -22,7 +22,6 @@ builder.Host.UseSerilog((context, config) =>
     config.ReadFrom.Configuration(context.Configuration));
 
 // ===================== Settings =====================
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<RazorPaySettings>(builder.Configuration.GetSection("RazorPaySettings"));
 
@@ -31,7 +30,7 @@ builder.Services.AddApplication();                              // Application l
 builder.Services.AddInfrastructure(builder.Configuration);      // Infrastructure — DbContext, repos, UoW, external services
 
 // ===================== AutoMapper =====================
-builder.Services.AddAutoMapper(typeof(MappingProfile));
+builder.Services.AddAutoMapper(cfg => cfg.AddMaps(typeof(MappingProfile).Assembly));
 
 // ===================== FluentValidation =====================
 builder.Services.AddFluentValidationAutoValidation()
@@ -42,7 +41,25 @@ builder.Services.AddMemoryCache();
 
 // ===================== Authentication =====================
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>();
-if (jwtSettings == null || string.IsNullOrEmpty(jwtSettings.Key))
+var hasValidJwtKey = jwtSettings != null &&
+    !string.IsNullOrWhiteSpace(jwtSettings.Key) &&
+    System.Text.Encoding.UTF8.GetByteCount(jwtSettings.Key) >= 32;
+
+if (!hasValidJwtKey && builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Configuration["Jwt:Key"] = "IntegrationTestsJwtSigningKey_32BytesMin_2026";
+    builder.Configuration["Jwt:Issuer"] ??= "https://localhost:5000";
+    builder.Configuration["Jwt:Audience"] ??= "https://localhost:5000";
+    jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>();
+    hasValidJwtKey = jwtSettings != null &&
+        !string.IsNullOrWhiteSpace(jwtSettings.Key) &&
+        System.Text.Encoding.UTF8.GetByteCount(jwtSettings.Key) >= 32;
+}
+
+// Now register the fully resolved settings into DI so AuthService gets the right key!
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+
+if (!hasValidJwtKey)
 {
     throw new Exception("JWT Settings are missing or invalid in configuration.");
 }
@@ -178,3 +195,5 @@ await DbSeeder.SeedAdminAsync(app.Services);
 await DbSeeder.SeedCategoriesAsync(app.Services);
 
 app.Run();
+
+public partial class Program { }

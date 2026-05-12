@@ -116,8 +116,9 @@ public class ProductControllerTests : IClassFixture<CustomWebAppFactory>
     {
         // Act
         var response = await _client.GetAsync("/health");
+        var content = await response.Content.ReadAsStringAsync();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "Because the health check failed with content: " + content);
     }
 }

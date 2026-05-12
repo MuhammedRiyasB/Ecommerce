@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using Ecommerce.Api;
 
 namespace Ecommerce.IntegrationTests.Fixtures;
 

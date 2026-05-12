@@ -45,6 +45,15 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/ecommerce-api:latest
 
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,nginx/nginx.conf"
+          target: "~/ecommerce"
+
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -52,24 +61,22 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Pull the latest image
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/ecommerce-api:latest
+            cd ~/ecommerce
             
-            # Stop and remove the existing container if it's running
-            sudo docker stop ecommerce-api || true
-            sudo docker rm ecommerce-api || true
+            # Create a .env file for docker compose
+            cat << 'EOF' > .env
+            DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+            PROD_DB_CONNECTION=${{ secrets.PROD_DB_CONNECTION }}
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+            CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+            CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+            CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+            ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+            EOF
             
-            # Run the new container, passing in database and Stripe secrets
-            sudo docker run -d \
-              --name ecommerce-api \
-              -p 80:8080 \
-              -e "ConnectionStrings__DefaultConnection=${{ secrets.PROD_DB_CONNECTION }}" \
-              -e "StripeSettings__SecretKey=${{ secrets.STRIPE_SECRET_KEY }}" \
-              -e "StripeSettings__PublishableKey=${{ secrets.STRIPE_PUBLISHABLE_KEY }}" \
-              -e "CloudinarySettings__CloudName=${{ secrets.CLOUDINARY_CLOUD_NAME }}" \
-              -e "CloudinarySettings__ApiKey=${{ secrets.CLOUDINARY_API_KEY }}" \
-              -e "CloudinarySettings__ApiSecret=${{ secrets.CLOUDINARY_API_SECRET }}" \
-              -e "Jwt__Key=${{ secrets.JWT_SECRET_KEY }}" \
-              -e "AdminSettings__Email=${{ secrets.ADMIN_EMAIL }}" \
-              -e "AdminSettings__Password=${{ secrets.ADMIN_PASSWORD }}" \
-              ${{ secrets.DOCKER_USERNAME }}/ecommerce-api:latest
+            # Pull the latest images and start containers
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans

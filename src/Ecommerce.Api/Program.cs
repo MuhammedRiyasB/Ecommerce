@@ -179,9 +179,20 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// ===================== Forwarded Headers =====================
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | 
+                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    // Clear the restricted proxy list so it trusts the Docker Compose Nginx container's IP
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
 // ===================== Middleware Pipeline =====================
+app.UseForwardedHeaders();
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<ExceptionHandlerMiddleware>();
 

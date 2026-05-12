@@ -77,6 +77,14 @@ jobs:
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
             EOF
             
+            # Ensure docker-compose is installed
+            if ! command -v docker-compose &> /dev/null && ! sudo docker --help | grep -q "compose"; then
+              echo "Installing docker-compose standalone binary..."
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+            fi
+            
             # Pull the latest images and start containers
             # Fallback to older docker-compose if modern plugin is missing
             if sudo docker --help | grep -q "compose"; then

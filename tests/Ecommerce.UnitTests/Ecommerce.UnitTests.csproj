@@ -1,4 +1,31 @@
-HTTPS / SSL Integration (Security): Right now Nginx is serving traffic on HTTP (Port 80). For an ecommerce site, you must have HTTPS. We can automate Let's Encrypt / Certbot within our Docker Compose setup to give you a free, auto-renewing SSL certificate. (Note: You need a registered Domain Name pointing to your EC2 IP for this).
-Distributed Caching (Redis): We can introduce a Redis container into the docker-compose.yml and wire up the API to cache high-traffic endpoints (like the Product Catalog) or store Shopping Cart sessions, massively improving performance.
-Background Jobs (Hangfire): If you need to send order confirmation emails, process refunds, or clean up abandoned carts without slowing down the user's web request, we can implement a robust background job processor.
-Stripe Webhooks: If you want to securely handle payment completions asynchronously, we can build out the Stripe webhook listener endpoints.
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <PackageReference Include="MockQueryable.Moq" Version="7.0.3" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ecommerce.Application\Ecommerce.Application.csproj" />
+  </ItemGroup>
+
+</Project>

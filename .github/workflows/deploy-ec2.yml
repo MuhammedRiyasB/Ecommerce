@@ -105,5 +105,5 @@ jobs:
                 -v "$(pwd)/certbot/conf:/etc/letsencrypt" \
                 -v "$(pwd)/certbot/www:/var/www/certbot" \
                 certbot/certbot certonly --webroot -w /var/www/certbot \
-                -d urbaniq.ddns.net --email ${{ secrets.ADMIN_EMAIL }} --agree-tos --no-eff-email
+                -d urbaniq.ddns.net --email ${{ secrets.ADMIN_EMAIL }} --agree-tos --no-eff-email --non-interactive --keep-until-expiring
             fi

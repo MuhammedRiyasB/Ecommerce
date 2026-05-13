@@ -90,8 +90,7 @@ jobs:
             sudo docker rm ecommerce-api || true
             
             # Pull the latest images and start containers
-            # Fallback to older docker-compose if modern plugin is missing
-            if sudo docker --help | grep -q "compose"; then
+            if sudo docker compose version &> /dev/null; then
               sudo docker compose pull
               sudo docker compose up -d --remove-orphans
             else
@@ -99,13 +98,12 @@ jobs:
               sudo docker-compose up -d --remove-orphans
             fi
 
-            # --- DIAGNOSTICS START ---
-            echo "Waiting for containers to stabilize..."
-            sleep 5
-            echo "CONTAINER STATUS:"
-            sudo docker ps
-            echo "LOCAL CONNECTIVITY TEST:"
-            curl -I http://localhost/health || echo "Local health check failed!"
-            echo "NGINX ERROR LOGS (Last 20 lines):"
-            sudo docker logs ecommerce-nginx-1 --tail 20
-            # --- DIAGNOSTICS END ---
+            # Request SSL Certificate if it doesn't exist
+            if [ ! -d "./certbot/conf/live/urbaniq.ddns.net" ]; then
+              echo "Requesting initial SSL certificate..."
+              sudo docker run --rm \
+                -v "$(pwd)/certbot/conf:/etc/letsencrypt" \
+                -v "$(pwd)/certbot/www:/var/www/certbot" \
+                certbot/certbot certonly --webroot -w /var/www/certbot \
+                -d urbaniq.ddns.net --email ${{ secrets.ADMIN_EMAIL }} --agree-tos --no-eff-email
+            fi

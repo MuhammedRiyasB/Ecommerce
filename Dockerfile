@@ -25,16 +25,10 @@ FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./Ecommerce.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-FROM node:22-alpine AS frontend-build
-WORKDIR /frontend
-COPY ["Frontend/package.json", "Frontend/package-lock.json", "./"]
-RUN npm ci
-COPY ["Frontend/", "./"]
-RUN npm run build
-
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-COPY --from=frontend-build /frontend/dist ./wwwroot
+# Frontend/ is not in this repo yet (.gitignore). API-only image for CI/CD until Frontend is committed.
+# To bundle the React app, add a node frontend-build stage and: COPY --from=frontend-build /frontend/dist ./wwwroot
 ENTRYPOINT ["dotnet", "Ecommerce.Api.dll"]

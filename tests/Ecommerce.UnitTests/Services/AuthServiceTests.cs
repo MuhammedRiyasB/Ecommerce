@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using Ecommerce.Application.Common.Settings;
 using Ecommerce.Application.DTOs.Identity;
@@ -317,5 +320,134 @@ public class AuthServiceTests
 
         // Assert — SaveChanges must be called to persist the revocation
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(default), Times.AtLeastOnce);
+    }
+
+    // ==================== Password Reset Tests ====================
+
+    [Fact]
+    public async Task ForgotPasswordAsync_UnknownEmail_DoesNotSendMail()
+    {
+        var emptyUsers = new List<User>().AsQueryable().BuildMock();
+        _userRepoMock.Setup(r => r.Query()).Returns(emptyUsers);
+
+        await _sut.ForgotPasswordAsync(new ForgotPasswordRequestDto { Email = "missing@test.com" });
+
+        _emailSenderMock.Verify(
+            e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_KnownEmail_SendsOtpAndStoresHash()
+    {
+        var user = new User
+        {
+            UserId = Guid.NewGuid(), Name = "Jane", Email = "jane@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123!")
+        };
+        var users = new List<User> { user }.AsQueryable().BuildMock();
+        _userRepoMock.Setup(r => r.Query()).Returns(users);
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        string? emailBody = null;
+        _emailSenderMock
+            .Setup(e => e.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, body) => emailBody = body)
+            .Returns(Task.CompletedTask);
+
+        await _sut.ForgotPasswordAsync(new ForgotPasswordRequestDto { Email = "jane@test.com" });
+
+        emailBody.Should().NotBeNullOrWhiteSpace();
+        var otp = Regex.Match(emailBody!, @"\b(\d{6})\b").Groups[1].Value;
+        otp.Should().MatchRegex(@"^\d{6}$");
+        user.PasswordResetTokenHash.Should().Be(ComputeSha256Hash(otp));
+        user.PasswordResetTokenExpiresUtc.Should().BeAfter(DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task VerifyOtpAsync_ValidCode_ReturnsTrue()
+    {
+        const string otp = "123456";
+        var user = new User
+        {
+            UserId = Guid.NewGuid(), Name = "Jane", Email = "jane@test.com",
+            PasswordResetTokenHash = ComputeSha256Hash(otp),
+            PasswordResetTokenExpiresUtc = DateTime.UtcNow.AddMinutes(10)
+        };
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { user }.AsQueryable().BuildMock());
+
+        var result = await _sut.VerifyOtpAsync(new VerifyOtpRequestDto { Email = "jane@test.com", Code = otp });
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task VerifyOtpAsync_ExpiredCode_ReturnsFalse()
+    {
+        var user = new User
+        {
+            UserId = Guid.NewGuid(), Name = "Jane", Email = "jane@test.com",
+            PasswordResetTokenHash = ComputeSha256Hash("123456"),
+            PasswordResetTokenExpiresUtc = DateTime.UtcNow.AddMinutes(-1)
+        };
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { user }.AsQueryable().BuildMock());
+
+        var result = await _sut.VerifyOtpAsync(new VerifyOtpRequestDto { Email = "jane@test.com", Code = "123456" });
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ValidOtp_UpdatesPasswordAndClearsToken()
+    {
+        const string otp = "654321";
+        var user = new User
+        {
+            UserId = Guid.NewGuid(), Name = "Jane", Email = "jane@test.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123!"),
+            PasswordResetTokenHash = ComputeSha256Hash(otp),
+            PasswordResetTokenExpiresUtc = DateTime.UtcNow.AddMinutes(10)
+        };
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { user }.AsQueryable().BuildMock());
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        await _sut.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            Email = "jane@test.com",
+            Code = otp,
+            NewPassword = "NewPass123!"
+        });
+
+        BCrypt.Net.BCrypt.Verify("NewPass123!", user.PasswordHash).Should().BeTrue();
+        user.PasswordResetTokenHash.Should().BeNull();
+        user.PasswordResetTokenExpiresUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_InvalidOtp_ThrowsArgumentException()
+    {
+        var user = new User
+        {
+            UserId = Guid.NewGuid(), Name = "Jane", Email = "jane@test.com",
+            PasswordResetTokenHash = ComputeSha256Hash("111111"),
+            PasswordResetTokenExpiresUtc = DateTime.UtcNow.AddMinutes(10)
+        };
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { user }.AsQueryable().BuildMock());
+
+        var act = () => _sut.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            Email = "jane@test.com",
+            Code = "999999",
+            NewPassword = "NewPass123!"
+        });
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Invalid or expired*");
+    }
+
+    private static string ComputeSha256Hash(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToBase64String(bytes);
     }
 }

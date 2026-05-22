@@ -20,6 +20,7 @@ public class ProductServiceTests
 {
     private readonly Mock<IRepository<Product>> _productRepoMock;
     private readonly Mock<IRepository<Category>> _categoryRepoMock;
+    private readonly Mock<IRepository<OrderItem>> _orderItemRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IMapper> _mapperMock;
     private readonly Mock<ICloudImageService> _cloudImageMock;
@@ -30,6 +31,7 @@ public class ProductServiceTests
     {
         _productRepoMock = new Mock<IRepository<Product>>();
         _categoryRepoMock = new Mock<IRepository<Category>>();
+        _orderItemRepoMock = new Mock<IRepository<OrderItem>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
         _cloudImageMock = new Mock<ICloudImageService>();
@@ -38,6 +40,7 @@ public class ProductServiceTests
         _sut = new ProductService(
             _productRepoMock.Object,
             _categoryRepoMock.Object,
+            _orderItemRepoMock.Object,
             _unitOfWorkMock.Object,
             _mapperMock.Object,
             _cloudImageMock.Object,
@@ -51,8 +54,16 @@ public class ProductServiceTests
         Discount = 0,
         Quantity = 25,
         Description = "Premium cotton tee",
-        Size = "M",
-        Color = "Black",
+        DeliverablePincodes = "673001, 673002",
+        Variants =
+        [
+            new ProductVariantRequestDto
+            {
+                Size = "M",
+                Color = "Black",
+                Quantity = 25
+            }
+        ],
         Material = "100% Cotton",
         CategoryId = 1
     };
@@ -65,6 +76,14 @@ public class ProductServiceTests
         IsActive = true
     };
 
+    private static Mock<IFormFile> CreateImageMock()
+    {
+        var imageMock = new Mock<IFormFile>();
+        imageMock.SetupGet(file => file.Length).Returns(1024);
+        imageMock.SetupGet(file => file.FileName).Returns("product.jpg");
+        return imageMock;
+    }
+
     // ==================== AddProduct Tests ====================
 
     [Fact]
@@ -74,7 +93,7 @@ public class ProductServiceTests
         var dto = CreateValidDto();
         var category = CreateCategory();
         var product = new Product { Id = Guid.NewGuid(), ProductName = dto.ProductName };
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         var categories = new List<Category> { category }.AsQueryable().BuildMock();
         _categoryRepoMock.Setup(r => r.Query()).Returns(categories);
@@ -84,7 +103,7 @@ public class ProductServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        await _sut.AddProductAsync(dto, imageMock.Object);
+        await _sut.AddProductAsync(dto, new[] { imageMock.Object });
 
         // Assert
         _productRepoMock.Verify(r => r.AddAsync(It.IsAny<Product>()), Times.Once);
@@ -99,10 +118,10 @@ public class ProductServiceTests
         _categoryRepoMock.Setup(r => r.Query()).Returns(emptyCategories);
 
         var dto = CreateValidDto();
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         // Act & Assert
-        var act = () => _sut.AddProductAsync(dto, imageMock.Object);
+        var act = () => _sut.AddProductAsync(dto, new[] { imageMock.Object });
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("*Category*not found*");
     }
@@ -114,7 +133,7 @@ public class ProductServiceTests
         var dto = CreateValidDto();
         var category = CreateCategory();
         var product = new Product { Id = Guid.NewGuid() };
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         var categories = new List<Category> { category }.AsQueryable().BuildMock();
         _categoryRepoMock.Setup(r => r.Query()).Returns(categories);
@@ -124,7 +143,7 @@ public class ProductServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        await _sut.AddProductAsync(dto, imageMock.Object);
+        await _sut.AddProductAsync(dto, new[] { imageMock.Object });
 
         // Assert — Cloudinary upload must be called exactly once
         _cloudImageMock.Verify(s => s.UploadImageAsync(imageMock.Object), Times.Once);
@@ -137,7 +156,7 @@ public class ProductServiceTests
         var dto = CreateValidDto();
         var category = CreateCategory();
         var product = new Product { Id = Guid.NewGuid(), ProductName = "Classic T-Shirt" };
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         var categories = new List<Category> { category }.AsQueryable().BuildMock();
         _categoryRepoMock.Setup(r => r.Query()).Returns(categories);
@@ -147,7 +166,7 @@ public class ProductServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        await _sut.AddProductAsync(dto, imageMock.Object);
+        await _sut.AddProductAsync(dto, new[] { imageMock.Object });
 
         // Assert — SKU and Slug must be auto-generated (not null/empty)
         _productRepoMock.Verify(r => r.AddAsync(It.Is<Product>(p =>
@@ -164,7 +183,7 @@ public class ProductServiceTests
         var dto = CreateValidDto();
         var category = CreateCategory();
         var product = new Product { Id = Guid.NewGuid() };
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         var categories = new List<Category> { category }.AsQueryable().BuildMock();
         _categoryRepoMock.Setup(r => r.Query()).Returns(categories);
@@ -174,7 +193,7 @@ public class ProductServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        await _sut.AddProductAsync(dto, imageMock.Object);
+        await _sut.AddProductAsync(dto, new[] { imageMock.Object });
 
         // Assert — cache must be cleared after adding a product
         _cache.TryGetValue("products_cache", out _).Should().BeFalse();
@@ -190,7 +209,7 @@ public class ProductServiceTests
         var existingProduct = new Product { Id = productId, ProductName = "Old Name" };
         var dto = CreateValidDto();
         var category = CreateCategory();
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         var products = new List<Product> { existingProduct }.AsQueryable().BuildMock();
         _productRepoMock.Setup(r => r.Query()).Returns(products);
@@ -203,7 +222,7 @@ public class ProductServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        var result = await _sut.UpdateProductAsync(productId, dto, imageMock.Object);
+        var result = await _sut.UpdateProductAsync(productId, dto, new[] { imageMock.Object });
 
         // Assert
         result.Should().BeTrue();
@@ -218,10 +237,10 @@ public class ProductServiceTests
         _productRepoMock.Setup(r => r.Query()).Returns(emptyProducts);
 
         var dto = CreateValidDto();
-        var imageMock = new Mock<IFormFile>();
+        var imageMock = CreateImageMock();
 
         // Act
-        var result = await _sut.UpdateProductAsync(Guid.NewGuid(), dto, imageMock.Object);
+        var result = await _sut.UpdateProductAsync(Guid.NewGuid(), dto, new[] { imageMock.Object });
 
         // Assert
         result.Should().BeFalse();

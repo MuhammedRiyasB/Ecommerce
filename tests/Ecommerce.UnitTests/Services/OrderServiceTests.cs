@@ -1,5 +1,6 @@
 using AutoMapper;
 using Ecommerce.Application.DTOs.Orders;
+using Ecommerce.Application.Interfaces.Email;
 using Ecommerce.Application.Services.Orders;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Enums;
@@ -22,8 +23,10 @@ public class OrderServiceTests
     private readonly Mock<IRepository<Product>> _productRepoMock;
     private readonly Mock<IRepository<Address>> _addressRepoMock;
     private readonly Mock<IRepository<OrderItem>> _orderItemRepoMock;
+    private readonly Mock<IRepository<User>> _userRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IMapper> _mapperMock;
+    private readonly Mock<IEmailJobQueue> _emailJobQueueMock;
     private readonly OrderService _sut;
 
     public OrderServiceTests()
@@ -34,8 +37,10 @@ public class OrderServiceTests
         _productRepoMock = new Mock<IRepository<Product>>();
         _addressRepoMock = new Mock<IRepository<Address>>();
         _orderItemRepoMock = new Mock<IRepository<OrderItem>>();
+        _userRepoMock = new Mock<IRepository<User>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
+        _emailJobQueueMock = new Mock<IEmailJobQueue>();
 
         _sut = new OrderService(
             _orderRepoMock.Object,
@@ -44,8 +49,10 @@ public class OrderServiceTests
             _productRepoMock.Object,
             _addressRepoMock.Object,
             _orderItemRepoMock.Object,
+            _userRepoMock.Object,
             _unitOfWorkMock.Object,
-            _mapperMock.Object);
+            _mapperMock.Object,
+            _emailJobQueueMock.Object);
     }
 
     private static Guid SetupUserId() => Guid.NewGuid();
@@ -60,11 +67,30 @@ public class OrderServiceTests
         var product = new Product
         {
             Id = Guid.NewGuid(), ProductName = "Test Shirt", Price = 500, Quantity = 10,
-            Image = "https://test.com/img.jpg"
+            Image = "https://test.com/img.jpg",
+            DeliverablePincodes = "673001"
         };
+        var variant = new ProductVariant
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            Product = product,
+            Size = "M",
+            Color = "Black",
+            Quantity = 10
+        };
+        product.Variants = new List<ProductVariant> { variant };
 
-        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
-        var cartItem = new CartItem { Id = Guid.NewGuid(), ProductId = product.Id, Quantity = 2, Product = product };
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false, Pincode = "673001" };
+        var cartItem = new CartItem
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            ProductVariantId = variant.Id,
+            Quantity = 2,
+            Product = product,
+            ProductVariant = variant
+        };
         var cart = new Domain.Entities.Cart
         {
             CartId = Guid.NewGuid(), UserId = userId,
@@ -81,9 +107,13 @@ public class OrderServiceTests
         var carts = new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock();
         _cartRepoMock.Setup(r => r.Query()).Returns(carts);
 
-        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync()).Returns(Task.CompletedTask);
-        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
-        _unitOfWorkMock.Setup(u => u.CommitAsync()).Returns(Task.CompletedTask);
+        var users = new List<User> { new() { UserId = userId, Email = "customer@test.com" } }.AsQueryable().BuildMock();
+        _userRepoMock.Setup(r => r.Query()).Returns(users);
+
+        _unitOfWorkMock
+            .Setup(u => u.ExecuteInTransactionAsync(It.IsAny<Func<Task>>(), It.IsAny<CancellationToken>()))
+            .Returns<Func<Task>, CancellationToken>((action, _) => action());
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         return (userId, addressId, product);
     }
@@ -95,7 +125,7 @@ public class OrderServiceTests
     {
         // Arrange
         var (userId, addressId, _) = SetupValidOrderScenario();
-        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_001" };
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_001", PaymentMethod = "card" };
 
         // Act
         var result = await _sut.CreateOrderAsync(userId, dto);
@@ -103,7 +133,9 @@ public class OrderServiceTests
         // Assert
         result.Should().BeTrue();
         _orderRepoMock.Verify(r => r.AddAsync(It.IsAny<Order>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        _unitOfWorkMock.Verify(
+            u => u.ExecuteInTransactionAsync(It.IsAny<Func<Task>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -114,7 +146,7 @@ public class OrderServiceTests
         var orders = new List<Order> { existingOrder }.AsQueryable().BuildMock();
         _orderRepoMock.Setup(r => r.Query()).Returns(orders);
 
-        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_DUPLICATE" };
+        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_DUPLICATE", PaymentMethod = "card" };
 
         // Act & Assert
         var act = () => _sut.CreateOrderAsync(Guid.NewGuid(), dto);
@@ -132,7 +164,7 @@ public class OrderServiceTests
         var emptyAddresses = new List<Address>().AsQueryable().BuildMock();
         _addressRepoMock.Setup(r => r.Query()).Returns(emptyAddresses);
 
-        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_002" };
+        var dto = new CreateOrderRequestDto { AddressId = Guid.NewGuid(), TransactionId = "TXN_002", PaymentMethod = "card" };
 
         // Act & Assert
         var act = () => _sut.CreateOrderAsync(Guid.NewGuid(), dto);
@@ -150,7 +182,7 @@ public class OrderServiceTests
         var emptyOrders = new List<Order>().AsQueryable().BuildMock();
         _orderRepoMock.Setup(r => r.Query()).Returns(emptyOrders);
 
-        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false, Pincode = "673001" };
         var addresses = new List<Address> { address }.AsQueryable().BuildMock();
         _addressRepoMock.Setup(r => r.Query()).Returns(addresses);
 
@@ -158,7 +190,7 @@ public class OrderServiceTests
         var emptyCarts = new List<Domain.Entities.Cart>().AsQueryable().BuildMock();
         _cartRepoMock.Setup(r => r.Query()).Returns(emptyCarts);
 
-        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_003" };
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_003", PaymentMethod = "card" };
 
         // Act & Assert
         var act = () => _sut.CreateOrderAsync(userId, dto);
@@ -175,11 +207,29 @@ public class OrderServiceTests
         var product = new Product
         {
             Id = Guid.NewGuid(), ProductName = "Low Stock Shirt", Price = 500,
-            Quantity = 1, Image = "img.jpg" // Only 1 available
+            Quantity = 1, Image = "img.jpg", DeliverablePincodes = "673001" // Only 1 available
         };
+        var variant = new ProductVariant
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            Product = product,
+            Size = "M",
+            Color = "Black",
+            Quantity = 1
+        };
+        product.Variants = new List<ProductVariant> { variant };
 
-        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false };
-        var cartItem = new CartItem { Id = Guid.NewGuid(), ProductId = product.Id, Quantity = 5, Product = product };
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false, Pincode = "673001" };
+        var cartItem = new CartItem
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            ProductVariantId = variant.Id,
+            Quantity = 5,
+            Product = product,
+            ProductVariant = variant
+        };
         var cart = new Domain.Entities.Cart
         {
             CartId = Guid.NewGuid(), UserId = userId,
@@ -195,10 +245,9 @@ public class OrderServiceTests
         var carts = new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock();
         _cartRepoMock.Setup(r => r.Query()).Returns(carts);
 
-        _unitOfWorkMock.Setup(u => u.BeginTransactionAsync()).Returns(Task.CompletedTask);
-        _unitOfWorkMock.Setup(u => u.RollbackAsync()).Returns(Task.CompletedTask);
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_004", PaymentMethod = "card" };
 
-        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_004" };
+        // Act & Assert
 
         // Act & Assert
         var act = () => _sut.CreateOrderAsync(userId, dto);
@@ -212,7 +261,7 @@ public class OrderServiceTests
         // Arrange
         var (userId, addressId, product) = SetupValidOrderScenario();
         var originalStock = product.Quantity; // 10
-        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_005" };
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_005", PaymentMethod = "card" };
 
         // Act
         await _sut.CreateOrderAsync(userId, dto);
@@ -227,7 +276,7 @@ public class OrderServiceTests
     {
         // Arrange
         var (userId, addressId, _) = SetupValidOrderScenario();
-        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_006" };
+        var dto = new CreateOrderRequestDto { AddressId = addressId, TransactionId = "TXN_006", PaymentMethod = "card" };
 
         // Act
         await _sut.CreateOrderAsync(userId, dto);
@@ -243,10 +292,14 @@ public class OrderServiceTests
     {
         // Arrange
         var orderId = Guid.NewGuid();
-        var order = new Order { OrderId = orderId, OrderStatus = OrderStatus.Pending };
+        var userId = Guid.NewGuid();
+        var order = new Order { OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Pending };
         var orders = new List<Order> { order }.AsQueryable().BuildMock();
         _orderRepoMock.Setup(r => r.Query()).Returns(orders);
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var users = new List<User> { new() { UserId = userId, Email = "customer@test.com" } }.AsQueryable().BuildMock();
+        _userRepoMock.Setup(r => r.Query()).Returns(users);
 
         // Act
         var result = await _sut.ChangeOrderStatusAsync(orderId, "Shipped");
@@ -280,7 +333,7 @@ public class OrderServiceTests
         var order = new Order
         {
             OrderId = orderId, UserId = ownerUserId, OrderStatus = OrderStatus.Pending,
-            TotalPrice = 1000, TransactionId = "TXN_ACCESS",
+            TotalPrice = 1000, TransactionId = "TXN_ACCESS", PaymentMethod = "card",
             OrderItems = new List<OrderItem>(),
             Address = new Address { AddressId = Guid.NewGuid() }
         };

@@ -48,7 +48,18 @@ public class CartServiceTests
         ProductName = "Test T-Shirt",
         Price = 999,
         Quantity = 25,
-        Image = "https://test.com/image.jpg"
+        Image = "https://test.com/image.jpg",
+        DeliverablePincodes = "673001",
+        Variants =
+        [
+            new ProductVariant
+            {
+                Id = Guid.NewGuid(),
+                Size = "M",
+                Color = "Black",
+                Quantity = 25
+            }
+        ]
     };
 
     // ==================== AddToCart Tests ====================
@@ -59,10 +70,11 @@ public class CartServiceTests
         // Arrange
         var userId = Guid.NewGuid();
         var product = CreateProduct();
-        var dto = new AddToCartRequestDto { ProductId = product.Id, Quantity = 1 };
+        var variant = product.Variants[0];
+        var dto = new AddToCartRequestDto { ProductId = product.Id, ProductVariantId = variant.Id, Quantity = 1, DeliveryPincode = "673001" };
         var cartResponse = new CartResponseDto { CartId = Guid.NewGuid(), Items = new List<CartItemResponseDto>() };
 
-        _productRepoMock.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        _productRepoMock.Setup(r => r.Query()).Returns(new List<Product> { product }.AsQueryable().BuildMock());
 
         // First query returns null (no cart), second returns the newly created cart
         var emptyCarts = new List<Domain.Entities.Cart>().AsQueryable().BuildMock();
@@ -91,21 +103,31 @@ public class CartServiceTests
         var userId = Guid.NewGuid();
         var productId = Guid.NewGuid();
         var product = CreateProduct(productId);
-        var existingItem = new CartItem { Id = Guid.NewGuid(), ProductId = productId, Quantity = 2, Product = product };
+        var variant = product.Variants[0];
+        var existingItem = new CartItem
+        {
+            Id = Guid.NewGuid(),
+            ProductId = productId,
+            ProductVariantId = variant.Id,
+            Quantity = 2,
+            Product = product,
+            ProductVariant = variant,
+            DeliveryPincode = "673001"
+        };
         var existingCart = new Domain.Entities.Cart
         {
             CartId = Guid.NewGuid(), UserId = userId,
             CartItems = new List<CartItem> { existingItem }
         };
 
-        _productRepoMock.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(product);
+        _productRepoMock.Setup(r => r.Query()).Returns(new List<Product> { product }.AsQueryable().BuildMock());
         var carts = new List<Domain.Entities.Cart> { existingCart }.AsQueryable().BuildMock();
         _cartRepoMock.Setup(r => r.Query()).Returns(carts);
         _mapperMock.Setup(m => m.Map<CartResponseDto>(It.IsAny<Domain.Entities.Cart>()))
             .Returns(new CartResponseDto());
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var dto = new AddToCartRequestDto { ProductId = productId, Quantity = 3 };
+        var dto = new AddToCartRequestDto { ProductId = productId, ProductVariantId = variant.Id, Quantity = 3, DeliveryPincode = "673001" };
 
         // Act
         await _sut.AddToCartAsync(userId, dto);
@@ -121,21 +143,31 @@ public class CartServiceTests
         var userId = Guid.NewGuid();
         var productId = Guid.NewGuid();
         var product = CreateProduct(productId);
-        var existingItem = new CartItem { Id = Guid.NewGuid(), ProductId = productId, Quantity = 8, Product = product };
+        var variant = product.Variants[0];
+        var existingItem = new CartItem
+        {
+            Id = Guid.NewGuid(),
+            ProductId = productId,
+            ProductVariantId = variant.Id,
+            Quantity = 8,
+            Product = product,
+            ProductVariant = variant,
+            DeliveryPincode = "673001"
+        };
         var existingCart = new Domain.Entities.Cart
         {
             CartId = Guid.NewGuid(), UserId = userId,
             CartItems = new List<CartItem> { existingItem }
         };
 
-        _productRepoMock.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(product);
+        _productRepoMock.Setup(r => r.Query()).Returns(new List<Product> { product }.AsQueryable().BuildMock());
         var carts = new List<Domain.Entities.Cart> { existingCart }.AsQueryable().BuildMock();
         _cartRepoMock.Setup(r => r.Query()).Returns(carts);
         _mapperMock.Setup(m => m.Map<CartResponseDto>(It.IsAny<Domain.Entities.Cart>()))
             .Returns(new CartResponseDto());
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var dto = new AddToCartRequestDto { ProductId = productId, Quantity = 5 };
+        var dto = new AddToCartRequestDto { ProductId = productId, ProductVariantId = variant.Id, Quantity = 5, DeliveryPincode = "673001" };
 
         // Act
         await _sut.AddToCartAsync(userId, dto);
@@ -159,9 +191,9 @@ public class CartServiceTests
     public async Task AddToCartAsync_InvalidProduct_ThrowsArgumentException()
     {
         // Arrange — product doesn't exist
-        _productRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Product?)null);
+        _productRepoMock.Setup(r => r.Query()).Returns(new List<Product>().AsQueryable().BuildMock());
 
-        var dto = new AddToCartRequestDto { ProductId = Guid.NewGuid(), Quantity = 1 };
+        var dto = new AddToCartRequestDto { ProductId = Guid.NewGuid(), ProductVariantId = Guid.NewGuid(), Quantity = 1, DeliveryPincode = "673001" };
 
         // Act & Assert
         var act = () => _sut.AddToCartAsync(Guid.NewGuid(), dto);
@@ -189,7 +221,7 @@ public class CartServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        var result = await _sut.RemoveFromCartAsync(userId, productId);
+        var result = await _sut.RemoveFromCartAsync(userId, cartItem.Id);
 
         // Assert
         result.Should().BeTrue();
@@ -218,7 +250,15 @@ public class CartServiceTests
         // Arrange
         var userId = Guid.NewGuid();
         var productId = Guid.NewGuid();
-        var cartItem = new CartItem { Id = Guid.NewGuid(), ProductId = productId, Quantity = 3 };
+        var variant = new ProductVariant { Id = Guid.NewGuid(), Quantity = 25, Size = "M", Color = "Black" };
+        var cartItem = new CartItem
+        {
+            Id = Guid.NewGuid(),
+            ProductId = productId,
+            ProductVariantId = variant.Id,
+            ProductVariant = variant,
+            Quantity = 3
+        };
         var cart = new Domain.Entities.Cart
         {
             CartId = Guid.NewGuid(), UserId = userId,
@@ -230,7 +270,7 @@ public class CartServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        var result = await _sut.IncreaseQuantityAsync(userId, productId);
+        var result = await _sut.IncreaseQuantityAsync(userId, cartItem.Id);
 
         // Assert
         result.Should().BeTrue();
@@ -255,7 +295,7 @@ public class CartServiceTests
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Act
-        var result = await _sut.DecreaseQuantityAsync(userId, productId);
+        var result = await _sut.DecreaseQuantityAsync(userId, cartItem.Id);
 
         // Assert — item at quantity 1 decreased by 1 should be removed
         result.Should().BeTrue();

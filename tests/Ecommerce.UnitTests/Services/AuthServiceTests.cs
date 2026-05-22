@@ -1,11 +1,13 @@
 using AutoMapper;
 using Ecommerce.Application.Common.Settings;
 using Ecommerce.Application.DTOs.Identity;
+using Ecommerce.Application.Interfaces.Email;
 using Ecommerce.Application.Services.Identity;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Enums;
 using Ecommerce.Domain.Interfaces;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MockQueryable.Moq;
 using Moq;
@@ -22,7 +24,10 @@ public class AuthServiceTests
     private readonly Mock<IRepository<RefreshToken>> _refreshTokenRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IMapper> _mapperMock;
+    private readonly Mock<IEmailSender> _emailSenderMock;
+    private readonly Mock<ILogger<AuthService>> _loggerMock;
     private readonly IOptions<JwtSettings> _jwtOptions;
+    private readonly IOptions<EmailSettings> _emailOptions;
     private readonly AuthService _sut; // System Under Test
 
     public AuthServiceTests()
@@ -31,6 +36,8 @@ public class AuthServiceTests
         _refreshTokenRepoMock = new Mock<IRepository<RefreshToken>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
+        _emailSenderMock = new Mock<IEmailSender>();
+        _loggerMock = new Mock<ILogger<AuthService>>();
 
         // Configure JWT settings for token generation tests
         _jwtOptions = Options.Create(new JwtSettings
@@ -39,13 +46,26 @@ public class AuthServiceTests
             Issuer = "https://test-issuer.com",
             Audience = "https://test-audience.com"
         });
+        _emailOptions = Options.Create(new EmailSettings
+        {
+            Host = "localhost",
+            Port = 25,
+            Username = "test",
+            Password = "test",
+            FromAddress = "noreply@test.com",
+            FromName = "Test",
+            FrontendUrl = "https://test.local"
+        });
 
         _sut = new AuthService(
             _userRepoMock.Object,
             _refreshTokenRepoMock.Object,
             _unitOfWorkMock.Object,
             _mapperMock.Object,
-            _jwtOptions);
+            _jwtOptions,
+            _emailSenderMock.Object,
+            _emailOptions,
+            _loggerMock.Object);
     }
 
     // ==================== Registration Tests ====================
@@ -172,7 +192,7 @@ public class AuthServiceTests
         // Act & Assert
         var act = () => _sut.LoginAsync(dto);
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Invalid Email");
+            .WithMessage("Invalid email or password");
     }
 
     [Fact]
@@ -194,7 +214,7 @@ public class AuthServiceTests
         // Act & Assert
         var act = () => _sut.LoginAsync(dto);
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Invalid Password");
+            .WithMessage("Invalid email or password");
     }
 
     [Fact]

@@ -1,0 +1,99 @@
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
+
+export interface User {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  isBlocked?: boolean;
+}
+
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+}
+
+const AUTH_STORAGE_KEY = 'ecommerce.auth';
+
+const loadAuthState = (): AuthState => {
+  if (typeof window === 'undefined') {
+    return {
+      user: null,
+      token: null,
+      isAuthenticated: false,
+    };
+  }
+
+  try {
+    const rawState = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!rawState) {
+      return {
+        user: null,
+        token: null,
+        isAuthenticated: false,
+      };
+    }
+
+    const parsedState = JSON.parse(rawState) as Partial<AuthState>;
+    return {
+      user: parsedState.user ?? null,
+      token: parsedState.token ?? null,
+      isAuthenticated: Boolean(parsedState.token),
+    };
+  } catch {
+    return {
+      user: null,
+      token: null,
+      isAuthenticated: false,
+    };
+  }
+};
+
+export const persistAuthState = (state: AuthState) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!state.token || !state.user) {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      user: state.user,
+      token: state.token,
+    })
+  );
+};
+
+const initialState: AuthState = loadAuthState();
+
+const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    setCredentials: (
+      state,
+      action: PayloadAction<{ user: User; accessToken: string }>
+    ) => {
+      const { user, accessToken } = action.payload;
+      state.user = user;
+      state.token = accessToken;
+      state.isAuthenticated = true;
+    },
+    logout: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+    },
+  },
+});
+
+export const { setCredentials, logout } = authSlice.actions;
+export default authSlice.reducer;
+
+export const selectCurrentUser = (state: { auth: AuthState }) => state.auth.user;
+export const selectIsAuthenticated = (state: { auth: AuthState }) => state.auth.isAuthenticated;

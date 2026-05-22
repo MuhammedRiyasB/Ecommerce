@@ -11,13 +11,13 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["src/Ecommerce.Api/Ecommerce.Api.csproj", "src/Ecommerce.Api/"]
-COPY ["src/Ecommerce.Application/Ecommerce.Application.csproj", "src/Ecommerce.Application/"]
-COPY ["src/Ecommerce.Domain/Ecommerce.Domain.csproj", "src/Ecommerce.Domain/"]
-COPY ["src/Ecommerce.Infrastructure/Ecommerce.Infrastructure.csproj", "src/Ecommerce.Infrastructure/"]
-RUN dotnet restore "./src/Ecommerce.Api/Ecommerce.Api.csproj"
+COPY ["Backend/Ecommerce.Api/Ecommerce.Api.csproj", "Backend/Ecommerce.Api/"]
+COPY ["Backend/Ecommerce.Application/Ecommerce.Application.csproj", "Backend/Ecommerce.Application/"]
+COPY ["Backend/Ecommerce.Domain/Ecommerce.Domain.csproj", "Backend/Ecommerce.Domain/"]
+COPY ["Backend/Ecommerce.Infrastructure/Ecommerce.Infrastructure.csproj", "Backend/Ecommerce.Infrastructure/"]
+RUN dotnet restore "./Backend/Ecommerce.Api/Ecommerce.Api.csproj"
 COPY . .
-WORKDIR "/src/src/Ecommerce.Api"
+WORKDIR "/src/Backend/Ecommerce.Api"
 RUN dotnet build "./Ecommerce.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # This stage is used to publish the service project to be copied to the final stage
@@ -25,8 +25,16 @@ FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./Ecommerce.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
+FROM node:22-alpine AS frontend-build
+WORKDIR /frontend
+COPY ["Frontend/package.json", "Frontend/package-lock.json", "./"]
+RUN npm ci
+COPY ["Frontend/", "./"]
+RUN npm run build
+
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY --from=frontend-build /frontend/dist ./wwwroot
 ENTRYPOINT ["dotnet", "Ecommerce.Api.dll"]

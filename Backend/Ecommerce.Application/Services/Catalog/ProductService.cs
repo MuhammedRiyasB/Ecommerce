@@ -1,0 +1,506 @@
+using AutoMapper;
+using Ecommerce.Application.Common.ProductOptions;
+using Ecommerce.Application.DTOs.Catalog;
+using Ecommerce.Application.Interfaces.Catalog;
+using Ecommerce.Domain.Common;
+using Ecommerce.Domain.Entities;
+using Ecommerce.Domain.Interfaces;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using System.Text.RegularExpressions;
+
+namespace Ecommerce.Application.Services.Catalog
+{
+    public class ProductService : IProductService
+    {
+        private readonly IRepository<Product> _productRepo;
+        private readonly IRepository<Category> _categoryRepo;
+        private readonly IRepository<OrderItem> _orderItemRepo;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IMapper _mapper;
+        private readonly ICloudImageService _cloudImageService;
+        private readonly IMemoryCache _cache;
+        private const string PRODUCTS_CACHE_KEY = "products_cache";
+
+        public ProductService(
+            IRepository<Product> productRepo,
+            IRepository<Category> categoryRepo,
+            IRepository<OrderItem> orderItemRepo,
+            IUnitOfWork unitOfWork,
+            IMapper mapper,
+            ICloudImageService cloudImageService,
+            IMemoryCache cache)
+        {
+            _productRepo = productRepo;
+            _categoryRepo = categoryRepo;
+            _orderItemRepo = orderItemRepo;
+            _unitOfWork = unitOfWork;
+            _mapper = mapper;
+            _cloudImageService = cloudImageService;
+            _cache = cache;
+        }
+
+        public async Task AddProductAsync(CreateProductRequestDto productDto, IReadOnlyCollection<IFormFile> images)
+        {
+            if (images == null || images.Count == 0)
+            {
+                throw new ArgumentException("At least one product image is required.");
+            }
+
+            var category = await _categoryRepo.Query()
+                .FirstOrDefaultAsync(c => c.CategoryId == productDto.CategoryId);
+
+            if (category == null)
+            {
+                throw new ArgumentException($"Category with ID {productDto.CategoryId} not found.");
+            }
+
+            var uploadedImages = await UploadProductImagesAsync(images);
+            var normalizedVariants = NormalizeVariants(productDto.Variants);
+            var normalizedSizes = normalizedVariants.Select(v => v.Size).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var normalizedColors = normalizedVariants.Select(v => v.Color).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var product = _mapper.Map<Product>(productDto);
+            product.Id = Guid.NewGuid();
+            product.AvailableSizes = string.Join(", ", normalizedSizes);
+            product.AvailableColors = string.Join(", ", normalizedColors);
+            product.DeliverablePincodes = ProductOptionParser.NormalizePincodeCsv(productDto.DeliverablePincodes);
+            product.Quantity = normalizedVariants.Sum(v => v.Quantity);
+            product.Size = normalizedSizes[0];
+            product.Color = normalizedColors[0];
+            product.Image = uploadedImages[0].ImageUrl;
+            product.ProductImages = uploadedImages;
+            product.SKU = GenerateSku(category.CategoryName, product.Color, product.Size);
+            product.Slug = GenerateSlug(productDto.ProductName);
+            product.CreatedAtUtc = DateTime.UtcNow;
+            product.Variants = normalizedVariants.Select(variant => new ProductVariant
+            {
+                Id = Guid.NewGuid(),
+                ProductId = product.Id,
+                SKU = GenerateSku(category.CategoryName, variant.Color, variant.Size),
+                Size = variant.Size,
+                Color = variant.Color,
+                Quantity = variant.Quantity,
+                CreatedAtUtc = DateTime.UtcNow
+            }).ToList();
+
+            await _productRepo.AddAsync(product);
+            await _unitOfWork.SaveChangesAsync();
+            _cache.Remove(PRODUCTS_CACHE_KEY);
+        }
+
+        public async Task<bool> UpdateProductAsync(Guid id, CreateProductRequestDto productDto, IReadOnlyCollection<IFormFile> images)
+        {
+            var product = await _productRepo.Query()
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (product == null)
+            {
+                return false;
+            }
+
+            var category = await _categoryRepo.Query()
+                .FirstOrDefaultAsync(c => c.CategoryId == productDto.CategoryId);
+
+            if (category == null)
+            {
+                throw new ArgumentException($"Category with ID {productDto.CategoryId} not found.");
+            }
+
+            if (images != null && images.Count > 0)
+            {
+                var uploadedImages = await UploadProductImagesAsync(images);
+                product.ProductImages.Clear();
+                foreach (var uploadedImage in uploadedImages)
+                {
+                    product.ProductImages.Add(uploadedImage);
+                }
+
+                product.Image = uploadedImages[0].ImageUrl;
+            }
+
+            var normalizedVariants = NormalizeVariants(productDto.Variants);
+            var normalizedSizes = normalizedVariants.Select(v => v.Size).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var normalizedColors = normalizedVariants.Select(v => v.Color).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            _mapper.Map(productDto, product);
+            product.AvailableSizes = string.Join(", ", normalizedSizes);
+            product.AvailableColors = string.Join(", ", normalizedColors);
+            product.DeliverablePincodes = ProductOptionParser.NormalizePincodeCsv(productDto.DeliverablePincodes);
+            product.Quantity = normalizedVariants.Sum(v => v.Quantity);
+            product.Size = normalizedSizes[0];
+            product.Color = normalizedColors[0];
+            product.SKU = GenerateSku(category.CategoryName, product.Color, product.Size);
+            product.Slug = GenerateSlug(productDto.ProductName);
+            product.UpdatedAtUtc = DateTime.UtcNow;
+
+            var requestedVariantKeys = normalizedVariants
+                .Select(variant => BuildVariantKey(variant.Size, variant.Color))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var variantsToRemove = product.Variants
+                .Where(existing => !requestedVariantKeys.Contains(BuildVariantKey(existing.Size, existing.Color)))
+                .ToList();
+
+            foreach (var variantToRemove in variantsToRemove)
+            {
+                product.Variants.Remove(variantToRemove);
+            }
+
+            foreach (var variant in normalizedVariants)
+            {
+                var variantKey = BuildVariantKey(variant.Size, variant.Color);
+                var existingVariant = product.Variants.FirstOrDefault(existing =>
+                    BuildVariantKey(existing.Size, existing.Color).Equals(variantKey, StringComparison.OrdinalIgnoreCase));
+
+                if (existingVariant == null)
+                {
+                    product.Variants.Add(new ProductVariant
+                    {
+                        Id = Guid.NewGuid(),
+                        ProductId = product.Id,
+                        SKU = GenerateSku(category.CategoryName, variant.Color, variant.Size),
+                        Size = variant.Size,
+                        Color = variant.Color,
+                        Quantity = variant.Quantity,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+
+                    continue;
+                }
+
+                existingVariant.Size = variant.Size;
+                existingVariant.Color = variant.Color;
+                existingVariant.Quantity = variant.Quantity;
+                existingVariant.SKU = GenerateSku(category.CategoryName, variant.Color, variant.Size);
+                existingVariant.UpdatedAtUtc = DateTime.UtcNow;
+            }
+
+            _productRepo.Update(product);
+            await _unitOfWork.SaveChangesAsync();
+            _cache.Remove(PRODUCTS_CACHE_KEY);
+            return true;
+        }
+
+        public async Task<bool> DeleteProductAsync(Guid id)
+        {
+            var product = await _productRepo.GetByIdAsync(id);
+            if (product == null)
+            {
+                return false;
+            }
+
+            _productRepo.Remove(product);
+            await _unitOfWork.SaveChangesAsync();
+            _cache.Remove(PRODUCTS_CACHE_KEY);
+            return true;
+        }
+
+        public async Task<ProductResponseDto> GetProductByIdAsync(Guid productId)
+        {
+            var product = await _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.Id == productId);
+
+            if (product == null)
+            {
+                throw new ArgumentException($"Product with ID {productId} not found");
+            }
+
+            return _mapper.Map<ProductResponseDto>(product);
+        }
+
+
+        public async Task<ProductResponseDto?> GetProductBySlugAsync(string slug)
+        {
+            var product = await _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.Slug == slug);
+
+            return product == null ? null : _mapper.Map<ProductResponseDto>(product);
+        }
+
+        public async Task<PagedResult<ProductResponseDto>> GetAllProductsAsync(
+            int pageNumber = 1,
+            int pageSize = 10,
+            int? categoryId = null,
+            string? search = null,
+            decimal? minPrice = null,
+            decimal? maxPrice = null,
+            string? color = null,
+            string? size = null)
+        {
+            var query = _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .AsQueryable();
+
+            query = ApplyFilters(query, categoryId, search, minPrice, maxPrice, color, size);
+
+            var totalCount = await query.CountAsync();
+            var products = await query
+                .OrderByDescending(p => p.CreatedAtUtc)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<ProductResponseDto>
+            {
+                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+
+        public async Task<PagedResult<ProductResponseDto>> GetProductsByCategoryAsync(
+            int categoryId, int pageNumber = 1, int pageSize = 10)
+        {
+            return await GetAllProductsAsync(pageNumber, pageSize, categoryId: categoryId);
+        }
+
+        /// <summary>
+        /// Returns recent products ordered by CreatedAtUtc descending.
+        /// Supports pagination and optional price range filtering.
+        /// </summary>
+        public async Task<PagedResult<ProductResponseDto>> GetRecentProductsAsync(
+            int pageNumber = 1, int pageSize = 10,
+            decimal? minPrice = null, decimal? maxPrice = null)
+        {
+            var query = _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .AsQueryable();
+
+            // Apply optional price filters on effective price (Price - Discount)
+            if (minPrice.HasValue)
+                query = query.Where(p => (p.Price - p.Discount) >= minPrice.Value);
+
+            if (maxPrice.HasValue)
+                query = query.Where(p => (p.Price - p.Discount) <= maxPrice.Value);
+
+            var totalCount = await query.CountAsync();
+            var products = await query
+                .OrderByDescending(p => p.CreatedAtUtc)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<ProductResponseDto>
+            {
+                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+
+        /// <summary>
+        /// Returns top-selling products by aggregating OrderItem quantities.
+        /// Groups sold quantities per product and returns the highest sellers.
+        /// </summary>
+        public async Task<List<ProductResponseDto>> GetTopSellingProductsAsync(int count = 10)
+        {
+            // Aggregate total sold quantity per product from order items
+            var topProductIds = await _orderItemRepo.Query()
+                .AsNoTracking()
+                .GroupBy(oi => oi.ProductId)
+                .Select(g => new { ProductId = g.Key, TotalSold = g.Sum(oi => oi.Quantity) })
+                .OrderByDescending(x => x.TotalSold)
+                .Take(count)
+                .Select(x => x.ProductId)
+                .ToListAsync();
+
+            if (topProductIds.Count == 0)
+                return new List<ProductResponseDto>();
+
+            var products = await _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .Where(p => topProductIds.Contains(p.Id))
+                .ToListAsync();
+
+            // Preserve the top-selling order
+            var ordered = topProductIds
+                .Select(id => products.FirstOrDefault(p => p.Id == id))
+                .Where(p => p != null)
+                .ToList();
+
+            return _mapper.Map<List<ProductResponseDto>>(ordered);
+        }
+
+        /// <summary>
+        /// Returns products filtered by subcategory (leaf category in the hierarchy).
+        /// </summary>
+        public async Task<PagedResult<ProductResponseDto>> GetProductsBySubCategoryAsync(
+            int subCategoryId, int pageNumber = 1, int pageSize = 10)
+        {
+            var query = _productRepo.Query()
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.SubCategory)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Variants)
+                .Where(p => p.SubCategoryId == subCategoryId);
+
+            var totalCount = await query.CountAsync();
+            var products = await query
+                .OrderByDescending(p => p.CreatedAtUtc)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<ProductResponseDto>
+            {
+                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+
+        private static IQueryable<Product> ApplyFilters(
+            IQueryable<Product> query,
+            int? categoryId,
+            string? search,
+            decimal? minPrice,
+            decimal? maxPrice,
+            string? color,
+            string? size)
+        {
+            if (categoryId.HasValue)
+            {
+                query = query.Where(p => p.CategoryId == categoryId.Value || p.SubCategoryId == categoryId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var searchLower = search.ToLower();
+                query = query.Where(p =>
+                    p.ProductName.ToLower().Contains(searchLower) ||
+                    p.Description.ToLower().Contains(searchLower));
+            }
+
+            if (minPrice.HasValue)
+            {
+                query = query.Where(p => (p.Price - p.Discount) >= minPrice.Value);
+            }
+
+            if (maxPrice.HasValue)
+            {
+                query = query.Where(p => (p.Price - p.Discount) <= maxPrice.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(color))
+            {
+                var normalizedColor = color.Trim().ToLower();
+                query = query.Where(p => p.Variants.Any(v => v.Color.ToLower() == normalizedColor));
+            }
+
+            if (!string.IsNullOrWhiteSpace(size))
+            {
+                var normalizedSize = size.Trim().ToLower();
+                query = query.Where(p => p.Variants.Any(v => v.Size.ToLower() == normalizedSize));
+            }
+
+            return query;
+        }
+
+        private static List<ProductVariantRequestDto> NormalizeVariants(IEnumerable<ProductVariantRequestDto> variants)
+        {
+            return variants
+                .Where(variant => !string.IsNullOrWhiteSpace(variant.Size) && !string.IsNullOrWhiteSpace(variant.Color))
+                .Select(variant => new ProductVariantRequestDto
+                {
+                    Size = variant.Size.Trim(),
+                    Color = variant.Color.Trim(),
+                    Quantity = variant.Quantity
+                })
+                .ToList();
+        }
+
+        private static string BuildVariantKey(string size, string color)
+        {
+            return $"{size.Trim().ToLowerInvariant()}|{color.Trim().ToLowerInvariant()}";
+        }
+
+        private static string GenerateSku(string categoryName, string color, string size)
+        {
+            var catCode = categoryName.Replace(" ", "").ToUpperInvariant();
+            if (catCode.Length > 6)
+            {
+                catCode = catCode[..6];
+            }
+
+            var colorCode = color.Replace(" ", "").ToUpperInvariant();
+            if (colorCode.Length > 3)
+            {
+                colorCode = colorCode[..3];
+            }
+
+            var sizeCode = size.ToUpperInvariant();
+            var uniqueSuffix = Guid.NewGuid().ToString("N")[..4].ToUpperInvariant();
+
+            return $"{catCode}-{colorCode}-{sizeCode}-{uniqueSuffix}";
+        }
+
+        private static string GenerateSlug(string name)
+        {
+            var slug = name.ToLowerInvariant();
+            slug = Regex.Replace(slug, @"[^a-z0-9\s-]", "");
+            slug = Regex.Replace(slug, @"\s+", "-");
+            slug = Regex.Replace(slug, @"-+", "-");
+            slug = slug.Trim('-');
+
+            var suffix = Guid.NewGuid().ToString("N")[..6];
+            return $"{slug}-{suffix}";
+        }
+
+        private async Task<List<ProductImage>> UploadProductImagesAsync(IEnumerable<IFormFile> images)
+        {
+            var productImages = new List<ProductImage>();
+            var displayOrder = 0;
+
+            foreach (var image in images.Where(file => file != null && file.Length > 0))
+            {
+                var imageUrl = await _cloudImageService.UploadImageAsync(image);
+                productImages.Add(new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ImageUrl = imageUrl,
+                    DisplayOrder = displayOrder,
+                    IsPrimary = displayOrder == 0
+                });
+
+                displayOrder++;
+            }
+
+            if (productImages.Count == 0)
+            {
+                throw new ArgumentException("At least one valid product image is required.");
+            }
+
+            return productImages;
+        }
+    }
+}

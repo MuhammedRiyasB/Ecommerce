@@ -359,5 +359,11 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
+# Local development secrets (never commit)
+**/appsettings.Development.json
+Frontend/
+
+# Frontend app (commit in a separate branch/repo later)
+
 # Fody - auto-generated XML schema
 FodyWeavers.xsd

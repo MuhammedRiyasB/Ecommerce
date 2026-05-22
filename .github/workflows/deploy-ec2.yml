@@ -19,10 +19,13 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore src/Ecommerce.Api/Ecommerce.Api.csproj
+        run: dotnet restore Ecommerce.sln
 
       - name: Build
-        run: dotnet build src/Ecommerce.Api/Ecommerce.Api.csproj --no-restore -c Release
+        run: dotnet build Ecommerce.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Ecommerce.sln -c Release --no-build --verbosity normal
 
   deploy:
     needs: build-and-test

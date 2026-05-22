@@ -1,0 +1,25 @@
+using Ecommerce.Application.DTOs.Identity;
+
+namespace Ecommerce.Application.Interfaces.Identity
+{
+    /// <summary>
+    /// Handles user authentication operations: registration, login, token management,
+    /// and the full forgot-password / reset-password flow.
+    /// </summary>
+    public interface IAuthService
+    {
+        Task<UserResponseDto> RegisterAsync(RegisterRequestDto registerDto, string role = "User");
+        Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto);
+        Task<AuthResponseDto> RefreshTokenAsync(string refreshToken);
+        Task RevokeRefreshTokenAsync(string refreshToken);
+
+        /// <summary>Generates a 6-digit verification code, stores its hash, and emails it to the user.</summary>
+        Task ForgotPasswordAsync(ForgotPasswordRequestDto dto);
+
+        /// <summary>Checks if the provided 6-digit code is valid for the user.</summary>
+        Task<bool> VerifyOtpAsync(VerifyOtpRequestDto dto);
+
+        /// <summary>Validates the 6-digit code and updates the user's password.</summary>
+        Task ResetPasswordAsync(ResetPasswordRequestDto dto);
+    }
+}

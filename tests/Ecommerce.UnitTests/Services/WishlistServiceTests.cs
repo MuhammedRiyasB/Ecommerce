@@ -131,9 +131,9 @@ public class WishlistServiceTests
     {
         // Arrange — user has 3 items in wishlist
         var userId = Guid.NewGuid();
-        var product1 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 1", Price = 500, Image = "img1.jpg" };
-        var product2 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 2", Price = 600, Image = "img2.jpg" };
-        var product3 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 3", Price = 700, Image = "img3.jpg" };
+        var product1 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 1", Slug = "shirt-1", Price = 500, Image = "img1.jpg" };
+        var product2 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 2", Slug = "shirt-2", Price = 600, Image = "img2.jpg" };
+        var product3 = new Product { Id = Guid.NewGuid(), ProductName = "Shirt 3", Slug = "shirt-3", Price = 700, Image = "img3.jpg" };
 
         var wishItems = new List<WishList>
         {
@@ -158,5 +158,7 @@ public class WishlistServiceTests
         result.Items.Should().HaveCount(2);
         result.TotalCount.Should().Be(3);
         result.PageNumber.Should().Be(1);
+        result.Items.Should().OnlyContain(i => !string.IsNullOrWhiteSpace(i.Slug));
+        result.Items.Select(i => i.Slug).Should().BeSubsetOf(new[] { "shirt-1", "shirt-2", "shirt-3" });
     }
 }

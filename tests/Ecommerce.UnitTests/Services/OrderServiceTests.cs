@@ -346,4 +346,168 @@ public class OrderServiceTests
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("*not authorized*");
     }
+
+    // ==================== Delivery Check Tests ====================
+
+    [Fact]
+    public async Task CanDeliverCartToAddressAsync_ValidPincode_ReturnsTrue()
+    {
+        var (userId, addressId, _) = SetupValidOrderScenario();
+
+        var result = await _sut.CanDeliverCartToAddressAsync(userId, addressId);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanDeliverCartToAddressAsync_UnsupportedPincode_ReturnsFalse()
+    {
+        var userId = Guid.NewGuid();
+        var addressId = Guid.NewGuid();
+        var product = new Product
+        {
+            Id = Guid.NewGuid(), ProductName = "Shirt", Price = 500, Quantity = 5,
+            DeliverablePincodes = "673001"
+        };
+        var variant = new ProductVariant { Id = Guid.NewGuid(), ProductId = product.Id, Product = product, Quantity = 5 };
+        product.Variants = new List<ProductVariant> { variant };
+
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false, Pincode = "560001" };
+        var cartItem = new CartItem
+        {
+            Id = Guid.NewGuid(), ProductId = product.Id, ProductVariantId = variant.Id,
+            Quantity = 1, Product = product, ProductVariant = variant
+        };
+        var cart = new Domain.Entities.Cart { CartId = Guid.NewGuid(), UserId = userId, CartItems = new List<CartItem> { cartItem } };
+
+        _addressRepoMock.Setup(r => r.Query()).Returns(new List<Address> { address }.AsQueryable().BuildMock());
+        _cartRepoMock.Setup(r => r.Query()).Returns(new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock());
+
+        var result = await _sut.CanDeliverCartToAddressAsync(userId, addressId);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanDeliverCartToAddressAsync_MissingAddress_ReturnsFalse()
+    {
+        var userId = Guid.NewGuid();
+        _addressRepoMock.Setup(r => r.Query()).Returns(new List<Address>().AsQueryable().BuildMock());
+        _cartRepoMock.Setup(r => r.Query()).Returns(new List<Domain.Entities.Cart>().AsQueryable().BuildMock());
+
+        var result = await _sut.CanDeliverCartToAddressAsync(userId, Guid.NewGuid());
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanDeliverCartToAddressAsync_EmptyCart_ReturnsFalse()
+    {
+        var userId = Guid.NewGuid();
+        var addressId = Guid.NewGuid();
+        var address = new Address { AddressId = addressId, UserId = userId, IsDeleted = false, Pincode = "673001" };
+        var cart = new Domain.Entities.Cart { CartId = Guid.NewGuid(), UserId = userId, CartItems = new List<CartItem>() };
+
+        _addressRepoMock.Setup(r => r.Query()).Returns(new List<Address> { address }.AsQueryable().BuildMock());
+        _cartRepoMock.Setup(r => r.Query()).Returns(new List<Domain.Entities.Cart> { cart }.AsQueryable().BuildMock());
+
+        var result = await _sut.CanDeliverCartToAddressAsync(userId, addressId);
+
+        result.Should().BeFalse();
+    }
+
+    // ==================== Self-Service Order Tests ====================
+
+    [Fact]
+    public async Task CancelOrderAsync_PendingOrder_RestoresStockAndCancels()
+    {
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var product = new Product { Id = Guid.NewGuid(), ProductName = "Shirt", Quantity = 5 };
+        var variant = new ProductVariant { Id = Guid.NewGuid(), ProductId = product.Id, Product = product, Quantity = 3 };
+        var order = new Order
+        {
+            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Pending,
+            TotalPrice = 1000, TransactionId = "TXN1", PaymentMethod = "card",
+            OrderItems = new List<OrderItem>
+            {
+                new()
+                {
+                    OrderItemId = Guid.NewGuid(), ProductId = product.Id, ProductVariantId = variant.Id,
+                    Quantity = 2, Product = product, ProductVariant = variant
+                }
+            }
+        };
+
+        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { new() { UserId = userId, Email = "customer@test.com" } }.AsQueryable().BuildMock());
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var result = await _sut.CancelOrderAsync(userId, orderId, "Changed mind");
+
+        result.Message.Should().Be("Order cancelled successfully");
+        order.OrderStatus.Should().Be(OrderStatus.Cancelled);
+        product.Quantity.Should().Be(7);
+        variant.Quantity.Should().Be(5);
+        _productRepoMock.Verify(r => r.Update(product), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_ShippedOrder_ReturnsNotCancellableMessage()
+    {
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Shipped,
+            TotalPrice = 1000, TransactionId = "TXN2", PaymentMethod = "card",
+            OrderItems = new List<OrderItem>()
+        };
+
+        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
+
+        var result = await _sut.CancelOrderAsync(userId, orderId, "Too late");
+
+        result.Message.Should().Be("This order can no longer be cancelled");
+    }
+
+    [Fact]
+    public async Task RequestReturnAsync_DeliveredOrder_SubmitsReturnRequest()
+    {
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Delivered,
+            TotalPrice = 1000, TransactionId = "TXN3", PaymentMethod = "card"
+        };
+
+        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
+        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { new() { UserId = userId, Email = "customer@test.com" } }.AsQueryable().BuildMock());
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var result = await _sut.RequestReturnAsync(userId, orderId, "Damaged item");
+
+        result.Message.Should().Be("Return request submitted");
+        order.OrderStatus.Should().Be(OrderStatus.ReturnRequested);
+        order.ReturnReason.Should().Be("Damaged item");
+    }
+
+    [Fact]
+    public async Task RequestReplacementAsync_NonDeliveredOrder_ReturnsErrorMessage()
+    {
+        var userId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Pending,
+            TotalPrice = 1000, TransactionId = "TXN4", PaymentMethod = "card"
+        };
+
+        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
+
+        var result = await _sut.RequestReplacementAsync(userId, orderId, "Wrong size");
+
+        result.Message.Should().Be("Only delivered orders can be replaced");
+    }
 }

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, feat/automated-testing ]
+    branches: [ main, develop, feat/automated-testing, feature/backend-restructure, tests ]
   pull_request:
-    branches: [ main, develop, feat/automated-testing ]
+    branches: [ main, develop, feat/automated-testing, feature/backend-restructure ]
 
 jobs:
   build-and-test:

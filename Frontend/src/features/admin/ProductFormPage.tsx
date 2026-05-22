@@ -1,0 +1,679 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  useAddProductMutation,
+  useGetCategoriesQuery,
+  useGetProductByIdQuery,
+  useUpdateProductMutation,
+} from '../catalog/catalogApiSlice';
+import { useCreateCategoryMutation } from './adminApiSlice';
+import { toast } from 'react-toastify';
+import { ArrowLeft, Image as ImageIcon, Plus, Trash2, Upload, X } from 'lucide-react';
+
+type VariantDraft = {
+  size: string;
+  color: string;
+  quantity: string;
+};
+
+const emptyVariant = (): VariantDraft => ({
+  size: '',
+  color: '',
+  quantity: '0',
+});
+
+const quickSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', '34', '36'];
+const quickColors = ['Black', 'White', 'Navy', 'Grey', 'Olive', 'Brown', 'Beige'];
+
+const ProductFormPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = Boolean(id);
+  const navigate = useNavigate();
+
+  const { data: categories } = useGetCategoriesQuery();
+  const { data: productData, isLoading: isLoadingProduct } = useGetProductByIdQuery(id!, { skip: !isEditMode });
+  const [addProduct, { isLoading: isAdding }] = useAddProductMutation();
+  const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
+  const [createCategory, { isLoading: isCreatingCategory }] = useCreateCategoryMutation();
+
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [showAddSubCategory, setShowAddSubCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  const [formData, setFormData] = useState({
+    productName: '',
+    price: '',
+    discount: '0',
+    categoryId: '',
+    subCategoryId: '',
+    description: '',
+    deliverablePincodes: '',
+    material: 'Cotton',
+  });
+  const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+
+  const totalQuantity = useMemo(
+    () => variants.reduce((sum, variant) => sum + (Number.parseInt(variant.quantity || '0', 10) || 0), 0),
+    [variants]
+  );
+
+  useEffect(() => {
+    if (isEditMode && productData) {
+      setFormData({
+        productName: productData.productName,
+        price: productData.price.toString(),
+        discount: productData.discount.toString(),
+        categoryId: productData.categoryId.toString(),
+        subCategoryId: productData.subCategoryId?.toString() || '',
+        description: productData.description,
+        deliverablePincodes: productData.deliverablePincodes.join(', '),
+        material: productData.material || 'Cotton',
+      });
+      setVariants(
+        productData.variants.length
+          ? productData.variants.map((variant) => ({
+              size: variant.size,
+              color: variant.color,
+              quantity: variant.quantity.toString(),
+            }))
+          : [emptyVariant()]
+      );
+      setImageFiles([]);
+      setImagePreviews(productData.images?.length ? productData.images : [productData.image]);
+    }
+  }, [isEditMode, productData]);
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = event.target;
+    setFormData((current) => {
+      // Reset subCategory if category changes
+      if (name === 'categoryId') {
+        return { ...current, [name]: value, subCategoryId: '' };
+      }
+      return { ...current, [name]: value };
+    });
+  };
+
+  const selectedCategory = useMemo(
+    () => categories?.find((c) => c.categoryId.toString() === formData.categoryId),
+    [categories, formData.categoryId]
+  );
+
+  const handleVariantChange = (index: number, field: keyof VariantDraft, value: string) => {
+    setVariants((current) =>
+      current.map((variant, currentIndex) =>
+        currentIndex === index ? { ...variant, [field]: value } : variant
+      )
+    );
+  };
+
+  const addVariantRow = () => {
+    setVariants((current) => [...current, emptyVariant()]);
+  };
+
+  const removeVariantRow = (index: number) => {
+    setVariants((current) => (current.length === 1 ? current : current.filter((_, currentIndex) => currentIndex !== index)));
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    setImageFiles((current) => [...current, ...files]);
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          })
+      )
+    ).then((newPreviews) => {
+      setImagePreviews((current) => [...current, ...newPreviews]);
+    });
+
+    event.target.value = '';
+  };
+
+  const removePreviewAtIndex = (index: number) => {
+    setImagePreviews((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setImageFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const handleAddCategory = async (parentId?: number) => {
+    if (!newCategoryName.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+    try {
+      await createCategory({
+        categoryName: newCategoryName.trim(),
+        description: '',
+        parentCategoryId: parentId,
+      }).unwrap();
+      toast.success(parentId ? 'Sub-category added' : 'Category added');
+      setNewCategoryName('');
+      setShowAddCategory(false);
+      setShowAddSubCategory(false);
+    } catch (err: any) {
+      toast.error(err?.data?.message || 'Failed to add category');
+    }
+  };
+
+  const validateAdminFields = () => {
+    const pincodeValues = formData.deliverablePincodes.split(',').map((value) => value.trim()).filter(Boolean);
+    const validVariants = variants
+      .map((variant) => ({
+        size: variant.size.trim(),
+        color: variant.color.trim(),
+        quantity: Number.parseInt(variant.quantity || '0', 10),
+      }))
+      .filter((variant) => variant.size && variant.color);
+
+    if (!validVariants.length) {
+      toast.error('Add at least one size and color variant');
+      return false;
+    }
+
+    if (validVariants.some((variant) => Number.isNaN(variant.quantity) || variant.quantity < 0)) {
+      toast.error('Variant stock must be zero or more');
+      return false;
+    }
+
+    const uniqueKeys = new Set(validVariants.map((variant) => `${variant.size.toLowerCase()}|${variant.color.toLowerCase()}`));
+    if (uniqueKeys.size !== validVariants.length) {
+      toast.error('Each size and color combination must be unique');
+      return false;
+    }
+
+    if (pincodeValues.length === 0 || pincodeValues.some((value) => !/^\d{6}$/.test(value))) {
+      toast.error('Add valid 6-digit deliverable pincodes separated by commas');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!validateAdminFields()) {
+      return;
+    }
+
+    const data = new FormData();
+    const validVariants = variants
+      .map((variant) => ({
+        size: variant.size.trim(),
+        color: variant.color.trim(),
+        quantity: variant.quantity || '0',
+      }))
+      .filter((variant) => variant.size && variant.color);
+
+    data.append('productName', formData.productName);
+    data.append('price', formData.price);
+    data.append('quantity', totalQuantity.toString());
+    data.append('discount', formData.discount);
+    data.append('categoryId', formData.categoryId);
+    if (formData.subCategoryId) {
+      data.append('subCategoryId', formData.subCategoryId);
+    }
+    data.append('description', formData.description);
+    data.append('deliverablePincodes', formData.deliverablePincodes);
+    data.append('material', formData.material);
+
+    validVariants.forEach((variant, index) => {
+      data.append(`Variants[${index}].Size`, variant.size.trim());
+      data.append(`Variants[${index}].Color`, variant.color.trim());
+      data.append(`Variants[${index}].Quantity`, variant.quantity || '0');
+    });
+
+    imageFiles.forEach((imageFile) => data.append('images', imageFile));
+
+    try {
+      if (isEditMode) {
+        await updateProduct({ id: id!, formData: data }).unwrap();
+        toast.success('Product updated successfully');
+      } else {
+        if (!imageFiles.length) {
+          toast.error('At least one product image is required');
+          return;
+        }
+        await addProduct(data).unwrap();
+        toast.success('Product added successfully');
+      }
+      navigate('/admin/products');
+    } catch (err: any) {
+      toast.error(err?.data?.message || 'Failed to save product');
+    }
+  };
+
+  if (isEditMode && isLoadingProduct) {
+    return (
+      <div className="grid min-h-[50vh] place-items-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#d7b46a] border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/products')}
+          className="grid h-11 w-11 place-items-center border border-[#d8cdbb] bg-white text-[#111827] hover:border-[#9d731e]"
+          aria-label="Back to products"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#9d731e]">Catalog publishing</p>
+          <h2 className="mt-1 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">
+            {isEditMode ? 'Edit Product' : 'Add Product'}
+          </h2>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-6">
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <h3 className="border-b border-[#eee6da] pb-4 text-[12px] font-black uppercase tracking-[0.24em] text-[#111827]">
+              Basic information
+            </h3>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <label className="block md:col-span-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Product name</span>
+                <input
+                  required
+                  type="text"
+                  name="productName"
+                  value={formData.productName}
+                  onChange={handleChange}
+                  className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                  placeholder="e.g. Tailored Oxford Shirt"
+                />
+              </label>
+              <div className="block">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Category</span>
+                  {!showAddCategory && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCategory(true)}
+                      className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9d731e] hover:underline"
+                    >
+                      + Add New
+                    </button>
+                  )}
+                </div>
+                {showAddCategory ? (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="New category name"
+                      className="h-11 flex-1 border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddCategory()}
+                      disabled={isCreatingCategory}
+                      className="h-11 bg-[#111827] px-4 text-xs font-black uppercase text-white disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCategory(false)}
+                      className="flex h-11 w-11 items-center justify-center border border-[#d8cdbb] text-[#7c7467]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    name="categoryId"
+                    value={formData.categoryId}
+                    onChange={handleChange}
+                    className="mt-2 h-11 w-full border border-[#d8cdbb] bg-white px-3 text-sm outline-none focus:border-[#9d731e]"
+                  >
+                    <option value="">Select category</option>
+                    {categories?.map((category) => (
+                      <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {selectedCategory && (
+                <div className="block">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Sub Category</span>
+                    {!showAddSubCategory && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSubCategory(true)}
+                        className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9d731e] hover:underline"
+                      >
+                        + Add New
+                      </button>
+                    )}
+                  </div>
+                  {showAddSubCategory ? (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="New sub-category"
+                        className="h-11 flex-1 border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCategory(selectedCategory.categoryId)}
+                        disabled={isCreatingCategory}
+                        className="h-11 bg-[#111827] px-4 text-xs font-black uppercase text-white disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSubCategory(false)}
+                        className="flex h-11 w-11 items-center justify-center border border-[#d8cdbb] text-[#7c7467]"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      name="subCategoryId"
+                      value={formData.subCategoryId}
+                      onChange={handleChange}
+                      className="mt-2 h-11 w-full border border-[#d8cdbb] bg-white px-3 text-sm outline-none focus:border-[#9d731e]"
+                    >
+                      <option value="">Select sub-category</option>
+                      {selectedCategory.subCategories.map((sub) => (
+                        <option key={sub.categoryId} value={sub.categoryId}>{sub.categoryName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+              <div className="block">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Total stock</span>
+                <div className="mt-2 flex h-11 items-center border border-[#d8cdbb] bg-[#fbfaf7] px-3 text-sm font-semibold text-[#111827]">
+                  {totalQuantity}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <h3 className="border-b border-[#eee6da] pb-4 text-[12px] font-black uppercase tracking-[0.24em] text-[#111827]">
+              Pricing and delivery
+            </h3>
+            <div className="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Price</span>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                  placeholder="0.00"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Discount amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  name="discount"
+                  value={formData.discount}
+                  onChange={handleChange}
+                  className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                  placeholder="0"
+                />
+              </label>
+              <label className="block md:col-span-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Material</span>
+                <input
+                  type="text"
+                  name="material"
+                  value={formData.material}
+                  onChange={handleChange}
+                  className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                  placeholder="Premium cotton"
+                />
+              </label>
+              <label className="block md:col-span-2 lg:col-span-3">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Deliverable pincodes</span>
+                <textarea
+                  required
+                  name="deliverablePincodes"
+                  value={formData.deliverablePincodes}
+                  onChange={handleChange}
+                  rows={4}
+                  className="mt-2 w-full resize-none border border-[#d8cdbb] px-3 py-2 text-sm outline-none focus:border-[#9d731e]"
+                  placeholder="560001, 560002, 560003"
+                />
+                <p className="mt-2 text-xs text-[#7c7467]">Only these 6-digit pincodes will be allowed on the product page and at checkout.</p>
+              </label>
+            </div>
+          </section>
+
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <div className="flex items-center justify-between gap-4 border-b border-[#eee6da] pb-4">
+              <h3 className="text-[12px] font-black uppercase tracking-[0.24em] text-[#111827]">
+                Variant inventory
+              </h3>
+              <button
+                type="button"
+                onClick={addVariantRow}
+                className="inline-flex h-10 items-center gap-2 border border-[#111827] px-4 text-[11px] font-black uppercase tracking-[0.18em] text-[#111827]"
+              >
+                <Plus className="h-4 w-4" />
+                Add variant
+              </button>
+            </div>
+            <div className="mt-5 space-y-4">
+              {variants.map((variant, index) => (
+                <div key={`${index}-${variant.size}-${variant.color}`} className="grid gap-4 border border-[#eee6da] p-4 md:grid-cols-[1fr_1fr_140px_auto]">
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Size</span>
+                    <input
+                      required
+                      type="text"
+                      value={variant.size}
+                      onChange={(event) => handleVariantChange(index, 'size', event.target.value)}
+                      className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                      placeholder="M"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {quickSizes.slice(0, 6).map((size) => (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => handleVariantChange(index, 'size', variant.size === size ? '' : size)}
+                          className={`h-7 min-w-8 border px-2 text-[10px] font-black ${
+                            variant.size === size ? 'border-[#111827] bg-[#111827] text-white' : 'border-[#d8cdbb] text-[#514b43]'
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Color</span>
+                    <input
+                      required
+                      type="text"
+                      value={variant.color}
+                      onChange={(event) => handleVariantChange(index, 'color', event.target.value)}
+                      className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                      placeholder="Black"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {quickColors.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => handleVariantChange(index, 'color', variant.color === color ? '' : color)}
+                          className={`h-7 border px-2 text-[10px] font-black ${
+                            variant.color === color ? 'border-[#111827] bg-[#111827] text-white' : 'border-[#d8cdbb] text-[#514b43]'
+                          }`}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Stock</span>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      value={variant.quantity}
+                      onChange={(event) => handleVariantChange(index, 'quantity', event.target.value)}
+                      className="mt-2 h-11 w-full border border-[#d8cdbb] px-3 text-sm outline-none focus:border-[#9d731e]"
+                      placeholder="0"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => removeVariantRow(index)}
+                      className="grid h-11 w-11 place-items-center border border-[#d8cdbb] text-[#7c7467] hover:border-red-500 hover:text-red-500"
+                      aria-label={`Remove variant ${index + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-[#7c7467]">Each size and colour row keeps its own stock. Customers can only buy rows that still have stock.</p>
+          </section>
+
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <h3 className="border-b border-[#eee6da] pb-4 text-[12px] font-black uppercase tracking-[0.24em] text-[#111827]">
+              Product story
+            </h3>
+            <label className="mt-5 block">
+              <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Description</span>
+              <textarea
+                required
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={7}
+                className="mt-2 w-full resize-none border border-[#d8cdbb] px-3 py-2 text-sm outline-none focus:border-[#9d731e]"
+                placeholder="Describe fit, fabric, finish, occasion, and care notes..."
+              />
+            </label>
+          </section>
+        </div>
+
+        <aside className="space-y-6">
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <h3 className="border-b border-[#eee6da] pb-4 text-[12px] font-black uppercase tracking-[0.24em] text-[#111827]">
+              Product images
+            </h3>
+            <div className="mt-5 grid min-h-80 place-items-center border-2 border-dashed border-[#d8cdbb] bg-[#fbfaf7] p-5 text-center">
+              {imagePreviews.length ? (
+                <div className="w-full">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {imagePreviews.map((imagePreview, index) => (
+                      <div key={`${imagePreview}-${index}`} className="relative overflow-hidden bg-white shadow-sm">
+                        <img src={imagePreview} alt={`Preview ${index + 1}`} className="h-48 w-full object-cover" />
+                        {imageFiles.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => removePreviewAtIndex(index)}
+                            className="absolute right-2 top-2 grid h-8 w-8 place-items-center bg-red-600 text-white"
+                          >
+                            x
+                          </button>
+                        )}
+                        {index === 0 && (
+                          <span className="absolute left-2 top-2 bg-[#111827] px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+                            Primary
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {isEditMode && (
+                    <p className="mt-3 text-xs text-[#7c7467]">
+                      {imageFiles.length > 0
+                        ? 'These selected files will replace the current gallery when you save.'
+                        : 'This is the current gallery. Choose new files to replace it.'}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <ImageIcon className="mx-auto h-12 w-12 text-[#9d731e]" />
+                  <p className="mt-3 text-sm font-semibold text-[#111827]">Upload a clean product gallery</p>
+                  <p className="mt-1 text-xs text-[#7c7467]">PNG, JPG, WEBP. The first image becomes the main storefront image.</p>
+                </div>
+              )}
+            </div>
+            <label className="mt-4 flex h-11 cursor-pointer items-center justify-center border border-[#111827] text-[11px] font-black uppercase tracking-[0.2em] text-[#111827] hover:bg-[#111827] hover:text-white">
+              Choose images
+              <input type="file" className="sr-only" accept="image/*" multiple onChange={handleImageChange} />
+            </label>
+          </section>
+
+          <section className="border border-[#e1d5c2] bg-white p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#9d731e]">Publish controls</p>
+            <p className="mt-3 text-sm leading-6 text-[#6f6659]">
+              Review pricing, variant stock, deliverable pincodes, and imagery before publishing.
+            </p>
+            <div className="mt-5 grid gap-3">
+              <button
+                type="submit"
+                disabled={isAdding || isUpdating}
+                className="inline-flex h-11 items-center justify-center gap-2 bg-[#111827] px-5 text-[11px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-60"
+              >
+                {(isAdding || isUpdating) ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    {isEditMode ? 'Save changes' : 'Publish product'}
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/admin/products')}
+                className="h-11 border border-[#d8cdbb] bg-white text-[11px] font-black uppercase tracking-[0.2em] text-[#111827]"
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </aside>
+      </form>
+    </div>
+  );
+};
+
+export default ProductFormPage;

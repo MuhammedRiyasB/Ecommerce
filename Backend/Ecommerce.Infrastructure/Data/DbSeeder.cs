@@ -45,7 +45,7 @@ namespace Ecommerce.Infrastructure.Data
             // SQL Server and test-only in-memory providers can seed correctly.
             await EnsureDatabaseReadyAsync(context);
 
-            var adminEmail = configuration["AdminSettings:Email"];
+            var adminEmail = configuration["AdminSettings:Email"]?.Trim().ToLowerInvariant();
             var adminPassword = configuration["AdminSettings:Password"];
 
             if (string.IsNullOrEmpty(adminEmail) || string.IsNullOrEmpty(adminPassword))
@@ -54,9 +54,19 @@ namespace Ecommerce.Infrastructure.Data
                 return;
             }
 
-            if (await context.Users.AnyAsync(u => u.Email == adminEmail))
+            var existingAdmin = await context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower().Trim() == adminEmail);
+
+            if (existingAdmin is not null)
             {
-                logger.LogInformation("Admin user already exists with email: {Email}", adminEmail);
+                existingAdmin.Name = string.IsNullOrWhiteSpace(existingAdmin.Name) ? "Admin" : existingAdmin.Name;
+                existingAdmin.Email = adminEmail;
+                existingAdmin.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
+                existingAdmin.Role = UserRole.Admin;
+                existingAdmin.IsBlocked = false;
+
+                await context.SaveChangesAsync();
+                logger.LogInformation("Admin user refreshed successfully with email: {Email}", adminEmail);
                 return;
             }
 

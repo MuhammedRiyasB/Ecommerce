@@ -42,7 +42,10 @@ const LoginPage: React.FC = () => {
     try {
       const response = await login(data).unwrap();
       dispatch(setCredentials(response));
-      navigate(location.state?.redirectTo || '/');
+      const redirectTo = response.user.role === 'Admin'
+        ? '/admin'
+        : location.state?.redirectTo || '/';
+      navigate(redirectTo);
     } catch (err) {
       console.error('Failed to login:', err);
       const error = err as { data?: { message?: string; title?: string } };

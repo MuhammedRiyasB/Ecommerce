@@ -65,7 +65,12 @@ const AddressForm: React.FC<AddressFormProps> = ({ initialData, onSuccess, onCan
     }
   };
 
-  const fields = [
+  const fields: Array<{
+    name: keyof CreateAddressRequest;
+    label: string;
+    placeholder: string;
+    required: boolean;
+  }> = [
     { name: 'fullName', label: 'Full Name', placeholder: 'John Doe', required: true },
     { name: 'phoneNumber', label: 'Phone Number', placeholder: '9876543210', required: true },
     { name: 'pincode', label: 'Pincode', placeholder: '671316', required: true },
@@ -87,7 +92,7 @@ const AddressForm: React.FC<AddressFormProps> = ({ initialData, onSuccess, onCan
             <input
               type="text"
               name={field.name}
-              value={(form as Record<string, string>)[field.name]}
+              value={form[field.name]}
               onChange={handleChange}
               placeholder={field.placeholder}
               required={field.required}

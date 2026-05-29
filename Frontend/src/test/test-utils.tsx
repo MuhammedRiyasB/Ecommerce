@@ -1,30 +1,28 @@
 import React, { type PropsWithChildren } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore, type PreloadedState } from '@reduxjs/toolkit';
+import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom';
 import { apiSlice } from '@/app/apiSlice';
 import authReducer from '@/features/auth/authSlice';
 import cartReducer from '@/features/cart/cartSlice';
 
-export type RootState = {
-  api: ReturnType<typeof apiSlice.reducer>;
-  auth: ReturnType<typeof authReducer>;
-  cart: ReturnType<typeof cartReducer>;
-};
+const rootReducer = combineReducers({
+  [apiSlice.reducerPath]: apiSlice.reducer,
+  auth: authReducer,
+  cart: cartReducer,
+});
+
+export type RootState = ReturnType<typeof rootReducer>;
 
 interface ExtendedRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  preloadedState?: PreloadedState<RootState>;
+  preloadedState?: Partial<RootState>;
   routerProps?: MemoryRouterProps;
 }
 
-export function createTestStore(preloadedState?: PreloadedState<RootState>) {
+export function createTestStore(preloadedState?: Partial<RootState>) {
   return configureStore({
-    reducer: {
-      [apiSlice.reducerPath]: apiSlice.reducer,
-      auth: authReducer,
-      cart: cartReducer,
-    },
+    reducer: rootReducer,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(apiSlice.middleware),
     preloadedState,

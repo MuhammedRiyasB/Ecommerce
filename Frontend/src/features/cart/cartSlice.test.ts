@@ -24,7 +24,7 @@ const sampleProduct: Product = {
   color: 'Black',
   availableSizes: ['M'],
   availableColors: ['Black'],
-  deliverablePincodes: '673001',
+  deliverablePincodes: ['673001'],
   variants: [],
   categoryId: 1,
   categoryName: 'Shirts',

@@ -268,7 +268,7 @@ const CheckoutPage: React.FC = () => {
           </div>
         )}
 
-        {currentStep === 'summary' && selectedAddress && (
+        {currentStep === 'summary' && selectedAddress && cart && (
           <OrderSummary
             cart={cart}
             address={selectedAddress}

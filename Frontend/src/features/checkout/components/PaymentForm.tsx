@@ -14,7 +14,9 @@ import {
   type CardFieldState,
 } from '../paymentCardValidation';
 
-const stripePromise = loadStripe('pk_test_TYooMQauvdEDq54NiTphI7jx');
+const stripePromise = loadStripe(
+  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_TYooMQauvdEDq54NiTphI7jx'
+);
 
 export interface OrderSuccessDetails {
   cart: CartResponse;
@@ -69,9 +71,11 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
 
   const handlePayment = async () => {
     setFailureMessage(null);
+    const activeStripe = stripe;
+    const activeElements = elements;
 
     if (paymentMethod === 'card') {
-      if (!stripe || !elements) {
+      if (!activeStripe || !activeElements) {
         toast.error("Stripe hasn't loaded yet. Please wait a moment and try again.");
         return;
       }
@@ -83,7 +87,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
     setIsProcessing(true);
     try {
       if (paymentMethod === 'card') {
-        const cardElement = elements!.getElement(CardElement);
+        const cardElement = activeElements!.getElement(CardElement);
         if (!cardElement) throw new Error('Card element not found');
 
         const intentResult = await createPaymentIntent(finalAmount).unwrap();
@@ -97,7 +101,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
           return;
         }
 
-        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        const { error, paymentIntent } = await activeStripe!.confirmCardPayment(clientSecret, {
           payment_method: {
             card: cardElement,
           },

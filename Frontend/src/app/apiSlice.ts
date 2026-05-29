@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: '/api/v1',
+  baseUrl: import.meta.env.VITE_API_BASE_URL ?? '/api/v1',
   prepareHeaders: (headers, { getState }) => {
     // Break circular dependency by not importing RootState
     const state = getState() as { auth: { token: string | null } };

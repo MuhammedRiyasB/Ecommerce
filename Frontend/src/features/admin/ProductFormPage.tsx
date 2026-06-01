@@ -11,12 +11,14 @@ import { toast } from 'react-toastify';
 import { ArrowLeft, Image as ImageIcon, Plus, Trash2, Upload, X } from 'lucide-react';
 
 type VariantDraft = {
+  clientId: string;
   size: string;
   color: string;
   quantity: string;
 };
 
 const emptyVariant = (): VariantDraft => ({
+  clientId: crypto.randomUUID(),
   size: '',
   color: '',
   quantity: '0',
@@ -74,6 +76,7 @@ const ProductFormPage = () => {
       setVariants(
         productData.variants.length
           ? productData.variants.map((variant) => ({
+              clientId: variant.id || crypto.randomUUID(),
               size: variant.size,
               color: variant.color,
               quantity: variant.quantity.toString(),
@@ -489,7 +492,7 @@ const ProductFormPage = () => {
             </div>
             <div className="mt-5 space-y-4">
               {variants.map((variant, index) => (
-                <div key={`${index}-${variant.size}-${variant.color}`} className="grid gap-4 border border-[#eee6da] p-4 md:grid-cols-[1fr_1fr_140px_auto]">
+                <div key={variant.clientId} className="grid gap-4 border border-[#eee6da] p-4 md:grid-cols-[1fr_1fr_140px_auto]">
                   <label className="block">
                     <span className="text-xs font-black uppercase tracking-[0.18em] text-[#514b43]">Size</span>
                     <input
@@ -501,7 +504,7 @@ const ProductFormPage = () => {
                       placeholder="M"
                     />
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {quickSizes.slice(0, 6).map((size) => (
+                      {quickSizes.map((size) => (
                         <button
                           key={size}
                           type="button"

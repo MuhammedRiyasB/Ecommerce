@@ -92,7 +92,7 @@ namespace Ecommerce.Api.Controllers.Catalog
         /// <summary>
         /// Updates an existing product by ID.
         /// </summary>
-        [HttpPut("Update")]
+        [HttpPut("{id:guid}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateProduct(Guid id, [FromForm] CreateProductRequestDto productDto, [FromForm] List<IFormFile> images)
         {
@@ -102,14 +102,34 @@ namespace Ecommerce.Api.Controllers.Catalog
         }
 
         /// <summary>
+        /// Backward-compatible update endpoint for older clients using /Product/Update?id=...
+        /// </summary>
+        [HttpPut("Update")]
+        [Authorize(Roles = "Admin")]
+        public Task<IActionResult> UpdateProductLegacy([FromQuery] Guid id, [FromForm] CreateProductRequestDto productDto, [FromForm] List<IFormFile> images)
+        {
+            return UpdateProduct(id, productDto, images);
+        }
+
+        /// <summary>
         /// Soft-deletes a product by ID. Product is hidden but retained for order history.
         /// </summary>
-        [HttpDelete("Delete")]
+        [HttpDelete("{id:guid}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteProduct(Guid id)
         {
             var deleted = await _productService.DeleteProductAsync(id);
             return deleted ? Ok(new { message = "Product deleted successfully" }) : NotFound(new { message = $"Product with ID {id} not found" });
+        }
+
+        /// <summary>
+        /// Backward-compatible delete endpoint for older clients using /Product/Delete?id=...
+        /// </summary>
+        [HttpDelete("Delete")]
+        [Authorize(Roles = "Admin")]
+        public Task<IActionResult> DeleteProductLegacy([FromQuery] Guid id)
+        {
+            return DeleteProduct(id);
         }
         /// <summary>
         /// Returns recent products ordered by creation date (newest first).

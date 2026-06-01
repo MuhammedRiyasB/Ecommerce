@@ -116,7 +116,7 @@ const ProductManagementPage = () => {
                       <td className="px-5 py-4 text-right">
                         <div className="inline-flex gap-2">
                           <Link
-                            to={`/admin/products/edit/${product.id}`}
+                            to={`/admin/products/${product.id}/edit`}
                             className="grid h-9 w-9 place-items-center border border-[#d8cdbb] text-[#111827] hover:border-[#9d731e] hover:text-[#9d731e]"
                             title="Edit product"
                           >

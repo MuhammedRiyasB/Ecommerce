@@ -230,6 +230,68 @@ public class ProductServiceTests
     }
 
     [Fact]
+    public async Task UpdateProductAsync_UpdatesVariantRowsAndTotalStock()
+    {
+        // Arrange
+        var productId = Guid.NewGuid();
+        var existingProduct = new Product
+        {
+            Id = productId,
+            ProductName = "Existing Shirt",
+            Variants =
+            [
+                new ProductVariant
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    SKU = "TSH-BLA-M-0001",
+                    Size = "M",
+                    Color = "Black",
+                    Quantity = 2
+                },
+                new ProductVariant
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    SKU = "TSH-NAV-L-0002",
+                    Size = "L",
+                    Color = "Navy",
+                    Quantity = 3
+                }
+            ]
+        };
+        var dto = CreateValidDto();
+        dto.Variants =
+        [
+            new ProductVariantRequestDto { Size = "M", Color = "Black", Quantity = 7 },
+            new ProductVariantRequestDto { Size = "XL", Color = "Olive", Quantity = 4 }
+        ];
+        var category = CreateCategory();
+
+        var products = new List<Product> { existingProduct }.AsQueryable().BuildMock();
+        _productRepoMock.Setup(r => r.Query()).Returns(products);
+
+        var categories = new List<Category> { category }.AsQueryable().BuildMock();
+        _categoryRepoMock.Setup(r => r.Query()).Returns(categories);
+
+        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.UpdateProductAsync(productId, dto, Array.Empty<IFormFile>());
+
+        // Assert
+        result.Should().BeTrue();
+        existingProduct.Quantity.Should().Be(11);
+        existingProduct.AvailableSizes.Should().Be("M, XL");
+        existingProduct.AvailableColors.Should().Be("Black, Olive");
+        existingProduct.Variants.Should().HaveCount(2);
+        existingProduct.Variants.Should().ContainSingle(v => v.Size == "M" && v.Color == "Black" && v.Quantity == 7);
+        existingProduct.Variants.Should().ContainSingle(v => v.Size == "XL" && v.Color == "Olive" && v.Quantity == 4);
+        existingProduct.Variants.Should().NotContain(v => v.Color == "Navy");
+        _productRepoMock.Verify(r => r.Update(existingProduct), Times.Once);
+    }
+
+    [Fact]
     public async Task UpdateProductAsync_NonExistentProduct_ReturnsFalse()
     {
         // Arrange — empty product list

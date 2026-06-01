@@ -113,7 +113,7 @@ export const catalogApiSlice = apiSlice.injectEndpoints({
 
     updateProduct: builder.mutation<{ message: string }, { id: string; formData: FormData }>({
       query: ({ id, formData }) => ({
-        url: `/Product/Update?id=${id}`,
+        url: `/Product/${id}`,
         method: 'PUT',
         body: formData,
       }),
@@ -122,7 +122,7 @@ export const catalogApiSlice = apiSlice.injectEndpoints({
 
     deleteProduct: builder.mutation<{ message: string }, string>({
       query: (id) => ({
-        url: `/Product/Delete?id=${id}`,
+        url: `/Product/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: [{ type: 'Product', id: 'LIST' }],

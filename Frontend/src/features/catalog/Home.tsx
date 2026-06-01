@@ -1,218 +1,438 @@
-import React from 'react';
-import { ArrowRight, Award, Ruler, ShieldCheck, Truck } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, ChevronLeft, ChevronRight, Sparkles, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useGetRecentProductsQuery, useGetTopSellingProductsQuery } from './catalogApiSlice';
+import {
+  useGetCategoriesQuery,
+  useGetProductsQuery,
+  useGetRecentProductsQuery,
+  useGetTopSellingProductsQuery,
+  type Category,
+  type Product,
+} from './catalogApiSlice';
 import ProductCard from './components/ProductCard';
 
-const occasionEdits = [
-  {
-    title: 'Boardroom Formals',
-    copy: 'Crisp shirts, sharp trousers, and jackets cut for weekday authority.',
-    image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&q=80&w=1200',
-  },
-  {
-    title: 'Ceremony Ready',
-    copy: 'Elevated occasionwear for weddings, receptions, and refined evenings.',
-    image: 'https://images.unsplash.com/photo-1507680434567-5739c80be1ac?auto=format&fit=crop&q=80&w=1200',
-  },
-  {
-    title: 'Weekend Linen',
-    copy: 'Airy textures, relaxed collars, and breathable tailoring.',
-    image: 'https://images.unsplash.com/photo-1516257984-b1b4d707412e?auto=format&fit=crop&q=80&w=1200',
-  },
-];
+type HeroSlide = {
+  title: string;
+  eyebrow: string;
+  copy: string;
+  image: string;
+  href: string;
+  cta: string;
+};
 
-const serviceHighlights = [
-  { icon: Truck, title: 'Express Delivery', copy: 'Priority shipping on premium edits' },
-  { icon: Ruler, title: 'Tailored Fit Notes', copy: 'Size guidance for formal silhouettes' },
-  { icon: ShieldCheck, title: 'Secure Checkout', copy: 'Encrypted payments and protected sessions' },
-  { icon: Award, title: 'Quality Promise', copy: 'Curated fabrics and durable finishing' },
-];
+type PromoCard = {
+  title: string;
+  subtitle: string;
+  image?: string;
+  href: string;
+  tone: string;
+};
+
+const flattenCategories = (categories: Category[] = []): Category[] =>
+  categories.flatMap((category) => [category, ...flattenCategories(category.subCategories || [])]);
+
+const normalize = (value?: string) => value?.toLowerCase().trim() || '';
+
+const buildCatalogHref = (category?: Category) => (category ? `/catalog?categoryId=${category.categoryId}` : '/catalog');
+
+const getProductImage = (product?: Product) => product?.image || product?.images?.[0];
+
+const scrollRail = (railId: string, direction: 'left' | 'right') => {
+  const rail = document.getElementById(railId);
+  rail?.scrollBy({ left: direction === 'left' ? -520 : 520, behavior: 'smooth' });
+};
 
 const Home: React.FC = () => {
-  const { data: recentProducts, isLoading: isRecentLoading } = useGetRecentProductsQuery({ pageSize: 12 });
-  const { data: topSellingProducts, isLoading: isTopSellingLoading } = useGetTopSellingProductsQuery(8);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const { data: recentProducts, isLoading: isRecentLoading } = useGetRecentProductsQuery({ pageSize: 16 });
+  const { data: topSellingProducts, isLoading: isTopSellingLoading } = useGetTopSellingProductsQuery(10);
+  const { data: allProducts, isLoading: isAllProductsLoading } = useGetProductsQuery({ pageNumber: 1, pageSize: 80 });
+  const { data: categoryTree } = useGetCategoriesQuery();
+
+  const categories = useMemo(() => flattenCategories(categoryTree || []), [categoryTree]);
+  const products = allProducts?.items || recentProducts?.items || [];
+  const saleProducts = useMemo(() => products.filter((product) => product.discount > 0), [products]);
+
+  const formalCategory = categories.find((category) => {
+    const name = normalize(category.categoryName);
+    return name.includes('formal') || name.includes('shirt') || name.includes('trouser') || name.includes('blazer');
+  });
+
+  const occasionCategory = categories.find((category) => {
+    const name = normalize(category.categoryName);
+    return name.includes('occasion') || name.includes('wedding') || name.includes('suit') || name.includes('ethnic');
+  });
+
+  const categoryImageMap = useMemo(() => {
+    const map = new Map<number, string>();
+    products.forEach((product) => {
+      const image = getProductImage(product);
+      if (image && !map.has(product.categoryId)) {
+        map.set(product.categoryId, image);
+      }
+    });
+    return map;
+  }, [products]);
+
+  const heroSlides = useMemo<HeroSlide[]>(() => {
+    const featuredProducts = [...(recentProducts?.items || []), ...(topSellingProducts || []), ...products]
+      .filter((product, index, source) => getProductImage(product) && source.findIndex((item) => item.id === product.id) === index)
+      .slice(0, 5);
+
+    if (!featuredProducts.length) {
+      return [
+        {
+          title: 'Formal Shirts',
+          eyebrow: 'Catalog collection',
+          copy: 'Crisp shirts and tailored essentials from your product categories, ready for office and evening dressing.',
+          image: '/src/assets/hero.png',
+          href: '/catalog',
+          cta: 'Shop shirts',
+        },
+        {
+          title: 'Sharp Trousers',
+          eyebrow: 'Workwear edit',
+          copy: 'Clean trousers and smart pairings selected for polished everyday menswear.',
+          image: '/src/assets/hero.png',
+          href: '/catalog',
+          cta: 'Explore trousers',
+        },
+        {
+          title: 'Blazer Edit',
+          eyebrow: 'Occasion ready',
+          copy: 'Structured layers and refined formal pieces for important meetings, events, and celebrations.',
+          image: '/src/assets/hero.png',
+          href: '/catalog',
+          cta: 'View blazers',
+        },
+      ];
+    }
+
+    return featuredProducts.map((product, index) => ({
+      title: product.categoryName || product.productName,
+      eyebrow: index === 0 ? 'New season edit' : product.subCategoryName || 'Featured collection',
+      copy:
+        product.description ||
+        `Premium ${product.categoryName || 'menswear'} selected from the latest Urbaniq catalog for polished everyday dressing.`,
+      image: getProductImage(product)!,
+      href: `/product/${product.slug}`,
+      cta: index === 0 ? 'Shop now' : 'View product',
+    }));
+  }, [products, recentProducts?.items, topSellingProducts]);
+
+  useEffect(() => {
+    if (activeSlide >= heroSlides.length) {
+      setActiveSlide(0);
+    }
+  }, [activeSlide, heroSlides.length]);
+
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % heroSlides.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [heroSlides.length]);
+
+  const promoCards = useMemo<PromoCard[]>(() => {
+    const newest = recentProducts?.items?.[0];
+    const formalProduct = products.find((product) => product.categoryId === formalCategory?.categoryId);
+    const occasionProduct = products.find((product) => product.categoryId === occasionCategory?.categoryId);
+    const saleProduct = saleProducts[0];
+
+    return [
+      {
+        title: 'New Arrivals',
+        subtitle: 'Fresh shirts, trousers, and refined wardrobe updates',
+        image: getProductImage(newest),
+        href: '/catalog',
+        tone: 'from-[#111827]/15 via-[#111827]/10 to-[#111827]/86',
+      },
+      {
+        title: 'Formal',
+        subtitle: 'Office-ready tailoring and clean weekday essentials',
+        image: getProductImage(formalProduct) || (formalCategory ? categoryImageMap.get(formalCategory.categoryId) : undefined),
+        href: buildCatalogHref(formalCategory),
+        tone: 'from-[#1f2937]/10 via-[#1f2937]/15 to-[#111827]/88',
+      },
+      {
+        title: 'Occasional',
+        subtitle: 'Sharper pieces for weddings, evenings, and events',
+        image: getProductImage(occasionProduct) || (occasionCategory ? categoryImageMap.get(occasionCategory.categoryId) : undefined),
+        href: buildCatalogHref(occasionCategory),
+        tone: 'from-[#312e24]/10 via-[#312e24]/15 to-[#111827]/88',
+      },
+      {
+        title: 'Sale',
+        subtitle: 'Limited offers on selected premium styles',
+        image: getProductImage(saleProduct),
+        href: '/catalog',
+        tone: 'from-[#3a1f1f]/10 via-[#3a1f1f]/15 to-[#111827]/90',
+      },
+    ];
+  }, [categoryImageMap, formalCategory, occasionCategory, products, recentProducts?.items, saleProducts]);
+
+  const productsByCategory = useMemo(() => {
+    const grouped = new Map<string, Product[]>();
+
+    products.forEach((product) => {
+      const categoryName = product.categoryName || 'Featured Products';
+      const currentProducts = grouped.get(categoryName) || [];
+      grouped.set(categoryName, [...currentProducts, product]);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([categoryName, items]) => ({
+        categoryName,
+        items,
+        category: categories.find((item) => item.categoryName === categoryName),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [categories, products]);
+
+  const currentSlide = heroSlides[activeSlide] || heroSlides[0];
+  const isProductLoading = isRecentLoading || isTopSellingLoading || isAllProductsLoading;
 
   return (
     <div className="bg-[#fbfaf7]">
-      <section className="relative min-h-[calc(100vh-8.75rem)] overflow-hidden bg-[#111827]">
-        <img
-          src="https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=85&w=2200"
-          alt="Premium menswear collection"
-          className="absolute inset-0 h-full w-full object-cover opacity-72"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/95 via-[#111827]/58 to-transparent" />
-        <div className="container relative mx-auto flex min-h-[calc(100vh-8.75rem)] items-center py-20">
-          <div className="max-w-2xl text-[#f8f5ee]">
-            <p className="text-[11px] font-black uppercase tracking-[0.42em] text-[#d7b46a]">
-              New season formalwear
-            </p>
-            <h1 className="mt-5 text-5xl font-black uppercase leading-[0.92] tracking-[0.08em] sm:text-7xl lg:text-8xl">
-              The Modern Gentleman
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-[#e4ded3] sm:text-lg">
-              Build a wardrobe of tailored shirts, structured blazers, clean trousers, and occasionwear designed for premium everyday confidence.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-4">
-              <Link
-                to="/catalog"
-                className="inline-flex h-12 items-center gap-3 bg-[#d7b46a] px-8 text-[11px] font-black uppercase tracking-[0.22em] text-[#111827] transition-colors hover:bg-[#e2c77f]"
-              >
-                Shop new arrivals
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/catalog"
-                className="inline-flex h-12 items-center border border-white/60 px-8 text-[11px] font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-white hover:text-[#111827]"
-              >
-                Explore sale
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section className="relative overflow-hidden bg-[#111827]">
+        <div className="relative min-h-[560px] md:min-h-[680px]">
+          {currentSlide && (
+            <img
+              src={currentSlide.image}
+              alt={currentSlide.title}
+              className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/92 via-[#111827]/70 to-[#111827]/28" />
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#111827]/72 to-transparent" />
 
-      <section className="border-b border-[#e8e0d0] bg-[#f3ecdf]">
-        <div className="container mx-auto grid gap-px bg-[#e1d5c2] md:grid-cols-4">
-          {serviceHighlights.map((item) => (
-            <div key={item.title} className="flex items-start gap-4 bg-[#f3ecdf] px-5 py-7">
-              <item.icon className="mt-0.5 h-5 w-5 shrink-0 text-[#9d731e]" />
-              <div>
-                <h3 className="text-[11px] font-black uppercase tracking-[0.22em] text-[#111827]">{item.title}</h3>
-                <p className="mt-2 text-sm leading-5 text-[#6f6659]">{item.copy}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="container mx-auto py-16 sm:py-20">
-        <div className="mb-8 flex flex-col justify-between gap-5 border-b border-[#e8e0d0] pb-7 md:flex-row md:items-end">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.35em] text-[#9d731e]">Shop by occasion</p>
-            <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827] sm:text-4xl">
-              Curated Menswear Edits
-            </h2>
-          </div>
-          <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
-            View complete collection
-          </Link>
-        </div>
-
-        <div className="grid gap-5 lg:grid-cols-3">
-          {occasionEdits.map((edit) => (
-            <Link key={edit.title} to="/catalog" className="group relative min-h-[470px] overflow-hidden bg-[#111827]">
-              <img
-                src={edit.image}
-                alt={edit.title}
-                className="absolute inset-0 h-full w-full object-cover opacity-82 transition-transform duration-700 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#111827]/88 via-[#111827]/20 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-7 text-white">
-                <h3 className="text-2xl font-black uppercase tracking-[0.08em]">{edit.title}</h3>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-[#eee7dc]">{edit.copy}</p>
-                <span className="mt-6 inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.22em] text-[#d7b46a]">
-                  Shop edit
+          <div className="container relative mx-auto flex min-h-[560px] items-center py-16 md:min-h-[680px]">
+            <div className="max-w-2xl text-white">
+              <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[#d7b46a]">{currentSlide?.eyebrow}</p>
+              <h1 className="mt-5 text-5xl font-black uppercase leading-[0.94] tracking-[0.06em] sm:text-7xl">
+                {currentSlide?.title}
+              </h1>
+              <p className="mt-5 max-w-xl text-base font-medium leading-7 text-[#f1eadf] sm:text-lg">{currentSlide?.copy}</p>
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  to={currentSlide?.href || '/catalog'}
+                  className="inline-flex h-12 items-center gap-3 bg-[#d7b46a] px-8 text-[11px] font-black uppercase tracking-[0.22em] text-[#111827] transition-colors hover:bg-[#e2c77f]"
+                >
+                  {currentSlide?.cta || 'Shop now'}
                   <ArrowRight className="h-4 w-4" />
-                </span>
+                </Link>
+                <Link
+                  to="/catalog"
+                  className="inline-flex h-12 items-center border border-white/60 px-8 text-[11px] font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-white hover:text-[#111827]"
+                >
+                  View all products
+                </Link>
               </div>
-            </Link>
-          ))}
+            </div>
+          </div>
+
+          {heroSlides.length > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Previous banner"
+                onClick={() => setActiveSlide((current) => (current - 1 + heroSlides.length) % heroSlides.length)}
+                className="absolute left-4 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/84 text-[#111827] shadow-lg transition hover:bg-white"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next banner"
+                onClick={() => setActiveSlide((current) => (current + 1) % heroSlides.length)}
+                className="absolute right-4 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-white/84 text-[#111827] shadow-lg transition hover:bg-white"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+              <div className="absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-3">
+                {heroSlides.map((slide, index) => (
+                  <button
+                    key={`${slide.title}-${index}`}
+                    type="button"
+                    aria-label={`Show banner ${index + 1}`}
+                    onClick={() => setActiveSlide(index)}
+                    className={`h-1.5 rounded-full transition-all ${activeSlide === index ? 'w-12 bg-[#d7b46a]' : 'w-8 bg-white/72'}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </section>
 
-      <section className="bg-white py-16 sm:py-20">
+      <section className="border-y border-[#e8e0d0] bg-white py-10">
         <div className="container mx-auto">
-          <div className="mb-9 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+          <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none]">
+            {promoCards.map((card) => (
+              <Link
+                key={card.title}
+                to={card.href}
+                className="group relative h-56 min-w-[280px] flex-1 overflow-hidden bg-[#111827] sm:min-w-[340px] lg:min-w-0"
+              >
+                {card.image ? (
+                  <img
+                    src={card.image}
+                    alt={card.title}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-[#d8cdbb]" />
+                )}
+                <div className={`absolute inset-0 bg-gradient-to-t ${card.tone}`} />
+                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                  <h2 className="text-2xl font-black uppercase tracking-[0.08em]">{card.title}</h2>
+                  <p className="mt-2 max-w-xs text-sm font-medium leading-5 text-[#f2eadc]">{card.subtitle}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#fbfaf7] py-14 sm:py-16">
+        <div className="container mx-auto">
+          <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.35em] text-[#9d731e]">New Arrivals</p>
-              <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827] sm:text-4xl">
-                Recent Additions
-              </h2>
+              <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.32em] text-[#9d731e]">
+                <Sparkles className="h-4 w-4" />
+                New arrivals
+              </p>
+              <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">Just In</h2>
             </div>
             <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
               Shop all new arrivals
             </Link>
           </div>
 
-          {isRecentLoading ? (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} className="animate-pulse">
-                  <div className="aspect-[3/4] bg-[#efe7da]" />
-                  <div className="mt-4 h-3 w-2/3 bg-[#efe7da]" />
-                  <div className="mt-3 h-3 w-1/3 bg-[#efe7da]" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4">
-              {recentProducts?.items.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="border-t border-[#e8e0d0] bg-[#fbfaf7] py-16 sm:py-20">
-        <div className="container mx-auto">
-          <div className="mb-9 flex flex-col justify-between gap-5 md:flex-row md:items-end">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.35em] text-[#9d731e]">Customer favorites</p>
-              <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827] sm:text-4xl">
-                Highest Selling
-              </h2>
-            </div>
-            <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
-              Shop all products
-            </Link>
-          </div>
-
-          {isTopSellingLoading ? (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="animate-pulse">
-                  <div className="aspect-[3/4] bg-[#efe7da]" />
-                  <div className="mt-4 h-3 w-2/3 bg-[#efe7da]" />
-                  <div className="mt-3 h-3 w-1/3 bg-[#efe7da]" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4">
-              {topSellingProducts?.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="container mx-auto py-16 sm:py-20">
-        <div className="grid overflow-hidden bg-[#111827] lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="p-8 text-[#f8f5ee] sm:p-12 lg:p-16">
-            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-[#d7b46a]">Sale preview</p>
-            <h2 className="mt-5 text-4xl font-black uppercase leading-none tracking-[0.08em] sm:text-6xl">
-              Up to 50% off
-            </h2>
-            <p className="mt-6 max-w-md text-sm leading-7 text-[#d8d2c8]">
-              End-of-season prices on refined shirts, formal trousers, blazers, and wardrobe staples while selected sizes last.
-            </p>
-            <Link
-              to="/catalog"
-              className="mt-9 inline-flex h-12 items-center bg-[#f8f5ee] px-8 text-[11px] font-black uppercase tracking-[0.22em] text-[#111827]"
-            >
-              Shop sale
-            </Link>
-          </div>
-          <img
-            src="https://images.unsplash.com/photo-1523398002811-999ca8dec234?auto=format&fit=crop&q=85&w=1600"
-            alt="Formal clothing sale edit"
-            className="h-full min-h-[360px] w-full object-cover"
+          <ProductRail
+            railId="new-arrivals"
+            products={recentProducts?.items || []}
+            isLoading={isRecentLoading}
+            emptyText="New arrivals will appear here after products are added."
           />
         </div>
       </section>
+
+      {saleProducts.length > 0 && (
+        <section className="border-y border-[#e8e0d0] bg-white py-14 sm:py-16">
+          <div className="container mx-auto">
+            <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+              <div>
+                <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.32em] text-[#b42318]">
+                  <Tag className="h-4 w-4" />
+                  Sale
+                </p>
+                <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">Limited Offers</h2>
+              </div>
+              <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
+                View sale products
+              </Link>
+            </div>
+
+            <ProductRail railId="sale-products" products={saleProducts} isLoading={isAllProductsLoading} emptyText="Sale products will appear here when discounts are active." />
+          </div>
+        </section>
+      )}
+
+      <section className="bg-[#fbfaf7] py-14 sm:py-16">
+        <div className="container mx-auto space-y-16">
+          {productsByCategory.map((section) => (
+            <div key={section.categoryName}>
+              <div className="mb-8 flex flex-col justify-between gap-4 border-b border-[#e8e0d0] pb-5 md:flex-row md:items-end">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[#9d731e]">Shop by category</p>
+                  <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">{section.categoryName}</h2>
+                </div>
+                <Link
+                  to={buildCatalogHref(section.category)}
+                  className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link"
+                >
+                  View all
+                </Link>
+              </div>
+
+              <ProductRail
+                railId={`category-${section.categoryName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`}
+                products={section.items}
+                isLoading={isProductLoading}
+                emptyText={`No ${section.categoryName} products found yet.`}
+              />
+            </div>
+          ))}
+
+          {!productsByCategory.length && !isProductLoading && (
+            <div className="border border-[#e8e0d0] bg-white p-8 text-center">
+              <p className="text-sm font-semibold text-[#6f6659]">Products added from the admin catalog will appear on this page automatically.</p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const ProductRail: React.FC<{ railId: string; products: Product[]; isLoading: boolean; emptyText: string }> = ({
+  railId,
+  products,
+  isLoading,
+  emptyText,
+}) => {
+  if (isLoading) {
+    return (
+      <div className="flex gap-6 overflow-hidden">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="w-[260px] shrink-0 animate-pulse sm:w-[300px]">
+            <div className="aspect-[3/4] bg-[#efe7da]" />
+            <div className="mt-4 h-3 w-2/3 bg-[#efe7da]" />
+            <div className="mt-3 h-3 w-1/3 bg-[#efe7da]" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!products.length) {
+    return (
+      <div className="border border-[#e8e0d0] bg-white px-6 py-8">
+        <p className="text-sm font-semibold text-[#6f6659]">{emptyText}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="Scroll products left"
+        onClick={() => scrollRail(railId, 'left')}
+        className="absolute -left-3 top-[38%] z-10 hidden h-12 w-12 place-items-center rounded-full bg-white text-[#111827] shadow-lg transition hover:bg-[#f8f5ee] lg:grid"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+      <div id={railId} className="flex snap-x gap-6 overflow-x-auto scroll-smooth pb-4 [scrollbar-width:none]">
+        {products.map((product) => (
+          <div key={product.id} className="w-[260px] shrink-0 snap-start sm:w-[300px]">
+            <ProductCard product={product} />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        aria-label="Scroll products right"
+        onClick={() => scrollRail(railId, 'right')}
+        className="absolute -right-3 top-[38%] z-10 hidden h-12 w-12 place-items-center rounded-full bg-white text-[#111827] shadow-lg transition hover:bg-[#f8f5ee] lg:grid"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
     </div>
   );
 };

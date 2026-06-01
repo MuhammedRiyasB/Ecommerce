@@ -58,6 +58,11 @@ namespace Ecommerce.Application.Services.Catalog
 
             var uploadedImages = await UploadProductImagesAsync(images);
             var normalizedVariants = NormalizeVariants(productDto.Variants);
+            if (normalizedVariants.Count == 0)
+            {
+                throw new ArgumentException("At least one product variant is required.");
+            }
+
             var normalizedSizes = normalizedVariants.Select(v => v.Size).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var normalizedColors = normalizedVariants.Select(v => v.Color).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -123,6 +128,11 @@ namespace Ecommerce.Application.Services.Catalog
             }
 
             var normalizedVariants = NormalizeVariants(productDto.Variants);
+            if (normalizedVariants.Count == 0)
+            {
+                throw new ArgumentException("At least one product variant is required.");
+            }
+
             var normalizedSizes = normalizedVariants.Select(v => v.Size).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var normalizedColors = normalizedVariants.Select(v => v.Color).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -137,47 +147,7 @@ namespace Ecommerce.Application.Services.Catalog
             product.Slug = GenerateSlug(productDto.ProductName);
             product.UpdatedAtUtc = DateTime.UtcNow;
 
-            var requestedVariantKeys = normalizedVariants
-                .Select(variant => BuildVariantKey(variant.Size, variant.Color))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var variantsToRemove = product.Variants
-                .Where(existing => !requestedVariantKeys.Contains(BuildVariantKey(existing.Size, existing.Color)))
-                .ToList();
-
-            foreach (var variantToRemove in variantsToRemove)
-            {
-                product.Variants.Remove(variantToRemove);
-            }
-
-            foreach (var variant in normalizedVariants)
-            {
-                var variantKey = BuildVariantKey(variant.Size, variant.Color);
-                var existingVariant = product.Variants.FirstOrDefault(existing =>
-                    BuildVariantKey(existing.Size, existing.Color).Equals(variantKey, StringComparison.OrdinalIgnoreCase));
-
-                if (existingVariant == null)
-                {
-                    product.Variants.Add(new ProductVariant
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        SKU = GenerateSku(category.CategoryName, variant.Color, variant.Size),
-                        Size = variant.Size,
-                        Color = variant.Color,
-                        Quantity = variant.Quantity,
-                        CreatedAtUtc = DateTime.UtcNow
-                    });
-
-                    continue;
-                }
-
-                existingVariant.Size = variant.Size;
-                existingVariant.Color = variant.Color;
-                existingVariant.Quantity = variant.Quantity;
-                existingVariant.SKU = GenerateSku(category.CategoryName, variant.Color, variant.Size);
-                existingVariant.UpdatedAtUtc = DateTime.UtcNow;
-            }
+            SyncProductVariants(product, normalizedVariants, category.CategoryName);
 
             _productRepo.Update(product);
             await _unitOfWork.SaveChangesAsync();
@@ -442,6 +412,66 @@ namespace Ecommerce.Application.Services.Catalog
         private static string BuildVariantKey(string size, string color)
         {
             return $"{size.Trim().ToLowerInvariant()}|{color.Trim().ToLowerInvariant()}";
+        }
+
+        private static void SyncProductVariants(Product product, IReadOnlyList<ProductVariantRequestDto> requestedVariants, string categoryName)
+        {
+            var now = DateTime.UtcNow;
+            var existingVariants = product.Variants.ToList();
+            var unusedExistingVariants = existingVariants.ToList();
+            var requestedWithoutExactMatch = new List<ProductVariantRequestDto>();
+
+            foreach (var requestedVariant in requestedVariants)
+            {
+                var requestedKey = BuildVariantKey(requestedVariant.Size, requestedVariant.Color);
+                var exactMatch = unusedExistingVariants.FirstOrDefault(existing =>
+                    BuildVariantKey(existing.Size, existing.Color).Equals(requestedKey, StringComparison.OrdinalIgnoreCase));
+
+                if (exactMatch == null)
+                {
+                    requestedWithoutExactMatch.Add(requestedVariant);
+                    continue;
+                }
+
+                ApplyVariantUpdate(exactMatch, requestedVariant, categoryName, now);
+                unusedExistingVariants.Remove(exactMatch);
+            }
+
+            foreach (var requestedVariant in requestedWithoutExactMatch)
+            {
+                var reusableVariant = unusedExistingVariants.FirstOrDefault();
+                if (reusableVariant != null)
+                {
+                    ApplyVariantUpdate(reusableVariant, requestedVariant, categoryName, now);
+                    unusedExistingVariants.Remove(reusableVariant);
+                    continue;
+                }
+
+                product.Variants.Add(new ProductVariant
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = product.Id,
+                    SKU = GenerateSku(categoryName, requestedVariant.Color, requestedVariant.Size),
+                    Size = requestedVariant.Size,
+                    Color = requestedVariant.Color,
+                    Quantity = requestedVariant.Quantity,
+                    CreatedAtUtc = now
+                });
+            }
+
+            foreach (var unusedVariant in unusedExistingVariants)
+            {
+                product.Variants.Remove(unusedVariant);
+            }
+        }
+
+        private static void ApplyVariantUpdate(ProductVariant existingVariant, ProductVariantRequestDto requestedVariant, string categoryName, DateTime updatedAtUtc)
+        {
+            existingVariant.Size = requestedVariant.Size;
+            existingVariant.Color = requestedVariant.Color;
+            existingVariant.Quantity = requestedVariant.Quantity;
+            existingVariant.SKU = GenerateSku(categoryName, requestedVariant.Color, requestedVariant.Size);
+            existingVariant.UpdatedAtUtc = updatedAtUtc;
         }
 
         private static string GenerateSku(string categoryName, string color, string size)

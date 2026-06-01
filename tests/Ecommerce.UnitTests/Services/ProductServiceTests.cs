@@ -234,6 +234,8 @@ public class ProductServiceTests
     {
         // Arrange
         var productId = Guid.NewGuid();
+        var blackVariantId = Guid.NewGuid();
+        var navyVariantId = Guid.NewGuid();
         var existingProduct = new Product
         {
             Id = productId,
@@ -242,7 +244,7 @@ public class ProductServiceTests
             [
                 new ProductVariant
                 {
-                    Id = Guid.NewGuid(),
+                    Id = blackVariantId,
                     ProductId = productId,
                     SKU = "TSH-BLA-M-0001",
                     Size = "M",
@@ -251,7 +253,7 @@ public class ProductServiceTests
                 },
                 new ProductVariant
                 {
-                    Id = Guid.NewGuid(),
+                    Id = navyVariantId,
                     ProductId = productId,
                     SKU = "TSH-NAV-L-0002",
                     Size = "L",
@@ -285,8 +287,8 @@ public class ProductServiceTests
         existingProduct.AvailableSizes.Should().Be("M, XL");
         existingProduct.AvailableColors.Should().Be("Black, Olive");
         existingProduct.Variants.Should().HaveCount(2);
-        existingProduct.Variants.Should().ContainSingle(v => v.Size == "M" && v.Color == "Black" && v.Quantity == 7);
-        existingProduct.Variants.Should().ContainSingle(v => v.Size == "XL" && v.Color == "Olive" && v.Quantity == 4);
+        existingProduct.Variants.Should().ContainSingle(v => v.Id == blackVariantId && v.Size == "M" && v.Color == "Black" && v.Quantity == 7);
+        existingProduct.Variants.Should().ContainSingle(v => v.Id == navyVariantId && v.Size == "XL" && v.Color == "Olive" && v.Quantity == 4);
         existingProduct.Variants.Should().NotContain(v => v.Color == "Navy");
         _productRepoMock.Verify(r => r.Update(existingProduct), Times.Once);
     }

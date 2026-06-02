@@ -20,6 +20,7 @@ type VariantDraft = {
 type ProductImageDraft = {
   clientId: string;
   previewUrl: string;
+  color: string;
   file?: File;
 };
 
@@ -60,6 +61,17 @@ const ProductFormPage = () => {
   });
   const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
   const [productImages, setProductImages] = useState<ProductImageDraft[]>([]);
+  const variantColors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          variants
+            .map((variant) => variant.color.trim())
+            .filter(Boolean)
+        )
+      ),
+    [variants]
+  );
 
   const totalQuantity = useMemo(
     () => variants.reduce((sum, variant) => sum + (Number.parseInt(variant.quantity || '0', 10) || 0), 0),
@@ -89,10 +101,17 @@ const ProductFormPage = () => {
           : [emptyVariant()]
       );
       setProductImages(
-        (productData.images?.length ? productData.images : [productData.image]).filter(Boolean).map((imageUrl) => ({
-          clientId: crypto.randomUUID(),
-          previewUrl: imageUrl,
-        }))
+        productData.imageEntries?.length
+          ? productData.imageEntries.map((imageEntry) => ({
+              clientId: crypto.randomUUID(),
+              previewUrl: imageEntry.imageUrl,
+              color: imageEntry.color || '',
+            }))
+          : (productData.images?.length ? productData.images : [productData.image]).filter(Boolean).map((imageUrl) => ({
+              clientId: crypto.randomUUID(),
+              previewUrl: imageUrl,
+              color: '',
+            }))
       );
     }
   }, [isEditMode, productData]);
@@ -142,6 +161,7 @@ const ProductFormPage = () => {
               resolve({
                 clientId: crypto.randomUUID(),
                 previewUrl: reader.result as string,
+                color: variantColors.length === 1 ? variantColors[0] : '',
                 file,
               });
             reader.readAsDataURL(file);
@@ -156,6 +176,16 @@ const ProductFormPage = () => {
 
   const removePreviewAtIndex = (index: number) => {
     setProductImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const handleImageColorChange = (index: number, color: string) => {
+    setProductImages((current) =>
+      current.map((productImage, currentIndex) =>
+        currentIndex === index
+          ? { ...productImage, color }
+          : productImage
+      )
+    );
   };
 
   const handleAddCategory = async (parentId?: number) => {
@@ -209,6 +239,14 @@ const ProductFormPage = () => {
       return false;
     }
 
+    const invalidImageColor = productImages.find(
+      (productImage) => productImage.color && !validVariants.some((variant) => variant.color.toLowerCase() === productImage.color.toLowerCase())
+    );
+    if (invalidImageColor) {
+      toast.error(`Image colour "${invalidImageColor.color}" does not match any current variant colour`);
+      return false;
+    }
+
     return true;
   };
 
@@ -255,10 +293,14 @@ const ProductFormPage = () => {
       .filter((productImage) => !productImage.file)
       .forEach((productImage, index) => {
         data.append(`RetainedImageUrls[${index}]`, productImage.previewUrl);
+        data.append(`RetainedImageColors[${index}]`, productImage.color);
       });
     productImages
       .filter((productImage): productImage is ProductImageDraft & { file: File } => Boolean(productImage.file))
-      .forEach((productImage) => data.append('images', productImage.file));
+      .forEach((productImage, index) => {
+        data.append('images', productImage.file);
+        data.append(`NewImageColors[${index}]`, productImage.color);
+      });
 
     try {
       if (isEditMode) {
@@ -638,12 +680,29 @@ const ProductFormPage = () => {
                         <span className="absolute bottom-2 left-2 bg-white/92 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#111827]">
                           {productImage.file ? 'New' : 'Saved'}
                         </span>
+                        <div className="border-t border-[#eee6da] p-3">
+                          <label className="block text-left">
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#514b43]">Image colour</span>
+                            <select
+                              value={productImage.color}
+                              onChange={(event) => handleImageColorChange(index, event.target.value)}
+                              className="mt-2 h-10 w-full border border-[#d8cdbb] bg-white px-3 text-sm outline-none focus:border-[#9d731e]"
+                            >
+                              <option value="">All colours</option>
+                              {variantColors.map((color) => (
+                                <option key={color} value={color}>
+                                  {color}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
                       </div>
                     ))}
                   </div>
                   {isEditMode && (
                     <p className="mt-3 text-xs text-[#7c7467]">
-                      Delete saved images or add new uploads, then save to publish the final gallery. The first image becomes primary.
+                      Assign each image to a colour. On the storefront, selecting a colour will use that colour's gallery, while "All colours" works as shared fallback imagery.
                     </p>
                   )}
                 </div>

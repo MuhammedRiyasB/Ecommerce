@@ -8,6 +8,7 @@ namespace Ecommerce.Domain.Entities
         public Guid Id { get; set; }
         public Guid ProductId { get; set; }
         public string ImageUrl { get; set; } = null!;
+        public string? Color { get; set; }
         public int DisplayOrder { get; set; }
         public bool IsPrimary { get; set; }
 

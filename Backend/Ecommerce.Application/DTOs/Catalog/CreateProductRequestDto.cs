@@ -50,6 +50,16 @@ namespace Ecommerce.Application.DTOs.Catalog
         public List<string> RetainedImageUrls { get; set; } = new();
 
         /// <summary>
+        /// Colour assignment for each retained image URL. Use empty value to keep an image shared across colours.
+        /// </summary>
+        public List<string> RetainedImageColors { get; set; } = new();
+
+        /// <summary>
+        /// Colour assignment for each newly uploaded image. Index matches the uploaded file order.
+        /// </summary>
+        public List<string> NewImageColors { get; set; } = new();
+
+        /// <summary>
         /// ID of the root category (e.g., "Top Wear").
         /// </summary>
         public int CategoryId { get; set; }

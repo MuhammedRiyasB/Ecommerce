@@ -20,6 +20,8 @@ const sampleProduct: Product = {
   description: 'Test product',
   image: 'https://example.com/shirt.jpg',
   images: [],
+  imagesByColor: {},
+  imageEntries: [],
   size: 'M',
   color: 'Black',
   availableSizes: ['M'],

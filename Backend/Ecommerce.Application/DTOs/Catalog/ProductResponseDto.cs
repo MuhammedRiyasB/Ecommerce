@@ -16,6 +16,8 @@ namespace Ecommerce.Application.DTOs.Catalog
         public string Description { get; set; } = null!;
         public string Image { get; set; } = null!;
         public List<string> Images { get; set; } = new();
+        public Dictionary<string, List<string>> ImagesByColor { get; set; } = new();
+        public List<ProductImageResponseDto> ImageEntries { get; set; } = new();
         public string Size { get; set; } = null!;
         public string Color { get; set; } = null!;
         public List<string> AvailableSizes { get; set; } = new();

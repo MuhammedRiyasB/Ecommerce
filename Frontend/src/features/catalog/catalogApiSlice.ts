@@ -8,6 +8,13 @@ export interface ProductVariant {
   quantity: number;
 }
 
+export interface ProductImageEntry {
+  imageUrl: string;
+  color?: string | null;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
 export interface Product {
   id: string;
   productName: string;
@@ -19,6 +26,8 @@ export interface Product {
   description: string;
   image: string;
   images: string[];
+  imagesByColor: Record<string, string[]>;
+  imageEntries: ProductImageEntry[];
   size: string;
   color: string;
   availableSizes: string[];

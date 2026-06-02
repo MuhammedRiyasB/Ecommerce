@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   useAddProductMutation,
@@ -49,6 +49,11 @@ const ProductFormPage = () => {
   const [showAddSubCategory, setShowAddSubCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
+  // Guard ref — prevents the edit-mode useEffect from re-running after initial
+  // population, which would overwrite in-progress form edits (variant stock, etc.)
+  // whenever RTK Query re-emits productData with a new reference.
+  const formPopulatedForId = useRef<string | null>(null);
+
   const [formData, setFormData] = useState({
     productName: '',
     price: '',
@@ -79,7 +84,11 @@ const ProductFormPage = () => {
   );
 
   useEffect(() => {
-    if (isEditMode && productData) {
+    if (isEditMode && productData && formPopulatedForId.current !== id) {
+      // Mark this product ID as populated so subsequent RTK Query
+      // cache re-emissions don't overwrite the user's in-progress edits.
+      formPopulatedForId.current = id!;
+
       setFormData({
         productName: productData.productName,
         price: productData.price.toString(),
@@ -114,7 +123,7 @@ const ProductFormPage = () => {
             }))
       );
     }
-  }, [isEditMode, productData]);
+  }, [isEditMode, productData, id]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;

@@ -56,7 +56,6 @@ namespace Ecommerce.Application.Services.Catalog
                 throw new ArgumentException($"Category with ID {productDto.CategoryId} not found.");
             }
 
-            var uploadedImages = await UploadProductImagesAsync(images);
             var normalizedVariants = NormalizeVariants(productDto.Variants);
             if (normalizedVariants.Count == 0)
             {
@@ -74,8 +73,6 @@ namespace Ecommerce.Application.Services.Catalog
             product.Quantity = normalizedVariants.Sum(v => v.Quantity);
             product.Size = normalizedSizes[0];
             product.Color = normalizedColors[0];
-            product.Image = uploadedImages[0].ImageUrl;
-            product.ProductImages = uploadedImages;
             product.SKU = GenerateSku(category.CategoryName, product.Color, product.Size);
             product.Slug = GenerateSlug(productDto.ProductName);
             product.CreatedAtUtc = DateTime.UtcNow;
@@ -89,6 +86,14 @@ namespace Ecommerce.Application.Services.Catalog
                 Quantity = variant.Quantity,
                 CreatedAtUtc = DateTime.UtcNow
             }).ToList();
+            product.ProductImages = await BuildProductImagesAsync(
+                product.Id,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                productDto.NewImageColors,
+                images,
+                normalizedColors);
+            product.Image = product.ProductImages[0].ImageUrl;
 
             await _productRepo.AddAsync(product);
             await _unitOfWork.SaveChangesAsync();
@@ -115,8 +120,6 @@ namespace Ecommerce.Application.Services.Catalog
                 throw new ArgumentException($"Category with ID {productDto.CategoryId} not found.");
             }
 
-            await SyncProductImagesAsync(product, productDto.RetainedImageUrls, images);
-
             var normalizedVariants = NormalizeVariants(productDto.Variants);
             if (normalizedVariants.Count == 0)
             {
@@ -138,6 +141,14 @@ namespace Ecommerce.Application.Services.Catalog
             product.UpdatedAtUtc = DateTime.UtcNow;
 
             SyncProductVariants(product, normalizedVariants, category.CategoryName);
+            product.ProductImages = await BuildProductImagesAsync(
+                product.Id,
+                productDto.RetainedImageUrls,
+                productDto.RetainedImageColors,
+                productDto.NewImageColors,
+                images,
+                normalizedColors);
+            product.Image = product.ProductImages[0].ImageUrl;
 
             _productRepo.Update(product);
             await _unitOfWork.SaveChangesAsync();
@@ -496,35 +507,49 @@ namespace Ecommerce.Application.Services.Catalog
             return $"{slug}-{suffix}";
         }
 
-        private async Task SyncProductImagesAsync(Product product, IReadOnlyCollection<string> retainedImageUrls, IReadOnlyCollection<IFormFile> uploadedFiles)
+        private async Task<List<ProductImage>> BuildProductImagesAsync(
+            Guid productId,
+            IReadOnlyCollection<string> retainedImageUrls,
+            IReadOnlyCollection<string> retainedImageColors,
+            IReadOnlyCollection<string> newImageColors,
+            IReadOnlyCollection<IFormFile> uploadedFiles,
+            IReadOnlyCollection<string> allowedColors)
         {
             var hasNewUploads = uploadedFiles != null && uploadedFiles.Any(file => file != null && file.Length > 0);
-            var retainedUrls = (retainedImageUrls ?? Array.Empty<string>())
-                .Where(url => !string.IsNullOrWhiteSpace(url))
-                .Select(url => url.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var retainedUrls = retainedImageUrls?.ToList() ?? new List<string>();
+            var retainedColorsList = retainedImageColors?.ToList() ?? new List<string>();
+            var newImageColorsList = newImageColors?.ToList() ?? new List<string>();
+            var galleryImages = new List<ProductImage>();
 
-            if (retainedUrls.Count == 0 && !hasNewUploads)
+            for (var index = 0; index < retainedUrls.Count; index++)
             {
-                return;
+                var imageUrl = retainedUrls[index]?.Trim();
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                {
+                    continue;
+                }
+
+                galleryImages.Add(new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    ImageUrl = imageUrl,
+                    Color = NormalizeImageColor(index < retainedColorsList.Count ? retainedColorsList[index] : null, allowedColors),
+                    DisplayOrder = galleryImages.Count,
+                    IsPrimary = galleryImages.Count == 0
+                });
             }
-
-            var galleryImages = retainedUrls.Select((imageUrl, index) => new ProductImage
-            {
-                Id = Guid.NewGuid(),
-                ProductId = product.Id,
-                ImageUrl = imageUrl,
-                DisplayOrder = index,
-                IsPrimary = index == 0
-            }).ToList();
 
             if (hasNewUploads)
             {
-                var uploadedImages = await UploadProductImagesAsync(uploadedFiles ?? Array.Empty<IFormFile>());
-                foreach (var uploadedImage in uploadedImages)
+                var uploadedImages = await UploadProductImagesAsync(
+                    productId,
+                    uploadedFiles ?? Array.Empty<IFormFile>(),
+                    newImageColorsList,
+                    allowedColors,
+                    galleryImages.Count);
+                foreach (var uploadedImage in uploadedImages.Where(image => image != null))
                 {
-                    uploadedImage.DisplayOrder = galleryImages.Count;
                     uploadedImage.IsPrimary = galleryImages.Count == 0;
                     galleryImages.Add(uploadedImage);
                 }
@@ -535,32 +560,52 @@ namespace Ecommerce.Application.Services.Catalog
                 throw new ArgumentException("At least one product image is required.");
             }
 
-            product.ProductImages.Clear();
-            foreach (var galleryImage in galleryImages)
-            {
-                product.ProductImages.Add(galleryImage);
-            }
-
-            product.Image = galleryImages[0].ImageUrl;
+            return galleryImages;
         }
 
-        private async Task<List<ProductImage>> UploadProductImagesAsync(IEnumerable<IFormFile> images)
+        private static string? NormalizeImageColor(string? value, IReadOnlyCollection<string> allowedColors)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmedValue = value.Trim();
+            var allowedColor = allowedColors.FirstOrDefault(color =>
+                color.Equals(trimmedValue, StringComparison.OrdinalIgnoreCase));
+
+            if (allowedColor == null)
+            {
+                throw new ArgumentException($"Image color '{trimmedValue}' does not match any product variant color.");
+            }
+
+            return allowedColor;
+        }
+
+        private async Task<List<ProductImage>> UploadProductImagesAsync(
+            Guid productId,
+            IEnumerable<IFormFile> images,
+            IReadOnlyCollection<string> imageColors,
+            IReadOnlyCollection<string> allowedColors,
+            int displayOrderOffset)
         {
             var productImages = new List<ProductImage>();
-            var displayOrder = 0;
+            var validFiles = images.Where(file => file != null && file.Length > 0).ToList();
+            var imageColorsList = imageColors?.ToList() ?? new List<string>();
 
-            foreach (var image in images.Where(file => file != null && file.Length > 0))
+            for (var index = 0; index < validFiles.Count; index++)
             {
+                var image = validFiles[index];
                 var imageUrl = await _cloudImageService.UploadImageAsync(image);
                 productImages.Add(new ProductImage
                 {
                     Id = Guid.NewGuid(),
+                    ProductId = productId,
                     ImageUrl = imageUrl,
-                    DisplayOrder = displayOrder,
-                    IsPrimary = displayOrder == 0
+                    Color = NormalizeImageColor(index < imageColorsList.Count ? imageColorsList[index] : null, allowedColors),
+                    DisplayOrder = displayOrderOffset + index,
+                    IsPrimary = displayOrderOffset + index == 0
                 });
-
-                displayOrder++;
             }
 
             if (productImages.Count == 0)

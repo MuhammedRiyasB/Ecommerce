@@ -48,6 +48,7 @@ namespace Ecommerce.Api.Mapping
                 .ForMember(dest => dest.Variants, opt => opt.Ignore());
 
             CreateMap<ProductVariant, ProductVariantResponseDto>();
+            CreateMap<ProductImage, ProductImageResponseDto>();
 
             CreateMap<Product, ProductResponseDto>()
                 .ForMember(dest => dest.Image,
@@ -59,8 +60,25 @@ namespace Ecommerce.Api.Mapping
                 .ForMember(dest => dest.Images,
                     opt => opt.MapFrom(src =>
                         src.ProductImages
+                            .Where(pi => string.IsNullOrWhiteSpace(pi.Color))
                             .OrderBy(pi => pi.DisplayOrder)
                             .Select(pi => pi.ImageUrl)
+                            .ToList()))
+                .ForMember(dest => dest.ImagesByColor,
+                    opt => opt.MapFrom(src =>
+                        src.ProductImages
+                            .Where(pi => !string.IsNullOrWhiteSpace(pi.Color))
+                            .GroupBy(pi => pi.Color!)
+                            .ToDictionary(
+                                group => group.Key,
+                                group => group
+                                    .OrderBy(pi => pi.DisplayOrder)
+                                    .Select(pi => pi.ImageUrl)
+                                    .ToList())))
+                .ForMember(dest => dest.ImageEntries,
+                    opt => opt.MapFrom(src =>
+                        src.ProductImages
+                            .OrderBy(pi => pi.DisplayOrder)
                             .ToList()))
                 .ForMember(dest => dest.AvailableSizes,
                     opt => opt.MapFrom(src => src.Variants

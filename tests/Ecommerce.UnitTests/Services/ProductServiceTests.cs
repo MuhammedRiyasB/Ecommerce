@@ -236,10 +236,24 @@ public class ProductServiceTests
         var productId = Guid.NewGuid();
         var blackVariantId = Guid.NewGuid();
         var navyVariantId = Guid.NewGuid();
+        const string existingImageUrl = "https://cloudinary.com/existing-shirt.jpg";
         var existingProduct = new Product
         {
             Id = productId,
             ProductName = "Existing Shirt",
+            Image = existingImageUrl,
+            ProductImages =
+            [
+                new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    ImageUrl = existingImageUrl,
+                    Color = null,
+                    DisplayOrder = 0,
+                    IsPrimary = true
+                }
+            ],
             Variants =
             [
                 new ProductVariant
@@ -268,6 +282,9 @@ public class ProductServiceTests
             new ProductVariantRequestDto { Size = "M", Color = "Black", Quantity = 7 },
             new ProductVariantRequestDto { Size = "XL", Color = "Olive", Quantity = 4 }
         ];
+        // Retain the existing image so BuildProductImagesAsync has at least one image
+        dto.RetainedImageUrls = [existingImageUrl];
+        dto.RetainedImageColors = [""]; // No color assignment (shared across all colours)
         var category = CreateCategory();
 
         var products = new List<Product> { existingProduct }.AsQueryable().BuildMock();

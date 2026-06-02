@@ -79,6 +79,38 @@ const ProductDetailPage: React.FC = () => {
     }
   }, [sizeOptions, selectedSize, selectedColor]);
 
+  const galleryImages = useMemo(() => {
+    const colorSpecificImages = selectedColor ? product?.imagesByColor?.[selectedColor] ?? [] : [];
+    if (colorSpecificImages.length > 0) {
+      return colorSpecificImages;
+    }
+
+    const sharedImages = product?.images?.length ? product.images : [];
+    if (sharedImages.length > 0) {
+      return sharedImages;
+    }
+
+    if (selectedColor) {
+      const firstOtherColorImages = Object.values(product?.imagesByColor ?? {}).find((images) => images.length > 0);
+      if (firstOtherColorImages?.length) {
+        return firstOtherColorImages;
+      }
+    }
+
+    return product?.image ? [product.image] : [];
+  }, [product?.image, product?.images, product?.imagesByColor, selectedColor]);
+
+  useEffect(() => {
+    if (!galleryImages.length) {
+      setSelectedImage('');
+      return;
+    }
+
+    if (!selectedImage || !galleryImages.includes(selectedImage)) {
+      setSelectedImage(galleryImages[0]);
+    }
+  }, [galleryImages, selectedImage]);
+
   const validateSelections = () => {
     const nextErrors: { size?: string; color?: string; pincode?: string } = {};
 
@@ -205,7 +237,6 @@ const ProductDetailPage: React.FC = () => {
 
   const discountPercent = product.discount > 0 ? Math.round((product.discount / product.price) * 100) : 0;
   const finalPrice = product.price - product.discount;
-  const galleryImages = product.images?.length ? product.images : [product.image];
   const selectedGalleryImage = galleryImages.find((image) => image === selectedImage) ?? galleryImages[0];
 
   return (

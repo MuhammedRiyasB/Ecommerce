@@ -14,6 +14,9 @@ namespace Ecommerce.Infrastructure.Configurations
                 .IsRequired()
                 .HasMaxLength(500);
 
+            builder.Property(pi => pi.Color)
+                .HasMaxLength(50);
+
             builder.Property(pi => pi.DisplayOrder)
                 .IsRequired();
 

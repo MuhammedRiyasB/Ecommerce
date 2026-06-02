@@ -115,17 +115,7 @@ namespace Ecommerce.Application.Services.Catalog
                 throw new ArgumentException($"Category with ID {productDto.CategoryId} not found.");
             }
 
-            if (images != null && images.Count > 0)
-            {
-                var uploadedImages = await UploadProductImagesAsync(images);
-                product.ProductImages.Clear();
-                foreach (var uploadedImage in uploadedImages)
-                {
-                    product.ProductImages.Add(uploadedImage);
-                }
-
-                product.Image = uploadedImages[0].ImageUrl;
-            }
+            await SyncProductImagesAsync(product, productDto.RetainedImageUrls, images);
 
             var normalizedVariants = NormalizeVariants(productDto.Variants);
             if (normalizedVariants.Count == 0)
@@ -504,6 +494,54 @@ namespace Ecommerce.Application.Services.Catalog
 
             var suffix = Guid.NewGuid().ToString("N")[..6];
             return $"{slug}-{suffix}";
+        }
+
+        private async Task SyncProductImagesAsync(Product product, IReadOnlyCollection<string> retainedImageUrls, IReadOnlyCollection<IFormFile> uploadedFiles)
+        {
+            var hasNewUploads = uploadedFiles != null && uploadedFiles.Any(file => file != null && file.Length > 0);
+            var retainedUrls = (retainedImageUrls ?? Array.Empty<string>())
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (retainedUrls.Count == 0 && !hasNewUploads)
+            {
+                return;
+            }
+
+            var galleryImages = retainedUrls.Select((imageUrl, index) => new ProductImage
+            {
+                Id = Guid.NewGuid(),
+                ProductId = product.Id,
+                ImageUrl = imageUrl,
+                DisplayOrder = index,
+                IsPrimary = index == 0
+            }).ToList();
+
+            if (hasNewUploads)
+            {
+                var uploadedImages = await UploadProductImagesAsync(uploadedFiles ?? Array.Empty<IFormFile>());
+                foreach (var uploadedImage in uploadedImages)
+                {
+                    uploadedImage.DisplayOrder = galleryImages.Count;
+                    uploadedImage.IsPrimary = galleryImages.Count == 0;
+                    galleryImages.Add(uploadedImage);
+                }
+            }
+
+            if (galleryImages.Count == 0)
+            {
+                throw new ArgumentException("At least one product image is required.");
+            }
+
+            product.ProductImages.Clear();
+            foreach (var galleryImage in galleryImages)
+            {
+                product.ProductImages.Add(galleryImage);
+            }
+
+            product.Image = galleryImages[0].ImageUrl;
         }
 
         private async Task<List<ProductImage>> UploadProductImagesAsync(IEnumerable<IFormFile> images)

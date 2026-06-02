@@ -17,6 +17,12 @@ type VariantDraft = {
   quantity: string;
 };
 
+type ProductImageDraft = {
+  clientId: string;
+  previewUrl: string;
+  file?: File;
+};
+
 const emptyVariant = (): VariantDraft => ({
   clientId: crypto.randomUUID(),
   size: '',
@@ -53,8 +59,7 @@ const ProductFormPage = () => {
     material: 'Cotton',
   });
   const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [productImages, setProductImages] = useState<ProductImageDraft[]>([]);
 
   const totalQuantity = useMemo(
     () => variants.reduce((sum, variant) => sum + (Number.parseInt(variant.quantity || '0', 10) || 0), 0),
@@ -83,8 +88,12 @@ const ProductFormPage = () => {
             }))
           : [emptyVariant()]
       );
-      setImageFiles([]);
-      setImagePreviews(productData.images?.length ? productData.images : [productData.image]);
+      setProductImages(
+        (productData.images?.length ? productData.images : [productData.image]).filter(Boolean).map((imageUrl) => ({
+          clientId: crypto.randomUUID(),
+          previewUrl: imageUrl,
+        }))
+      );
     }
   }, [isEditMode, productData]);
 
@@ -124,26 +133,29 @@ const ProductFormPage = () => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
-    setImageFiles((current) => [...current, ...files]);
     Promise.all(
       files.map(
         (file) =>
-          new Promise<string>((resolve) => {
+          new Promise<ProductImageDraft>((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
+            reader.onloadend = () =>
+              resolve({
+                clientId: crypto.randomUUID(),
+                previewUrl: reader.result as string,
+                file,
+              });
             reader.readAsDataURL(file);
           })
       )
-    ).then((newPreviews) => {
-      setImagePreviews((current) => [...current, ...newPreviews]);
+    ).then((newImages) => {
+      setProductImages((current) => [...current, ...newImages]);
     });
 
     event.target.value = '';
   };
 
   const removePreviewAtIndex = (index: number) => {
-    setImagePreviews((current) => current.filter((_, currentIndex) => currentIndex !== index));
-    setImageFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setProductImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const handleAddCategory = async (parentId?: number) => {
@@ -207,6 +219,11 @@ const ProductFormPage = () => {
       return;
     }
 
+    if (!productImages.length) {
+      toast.error('At least one product image is required');
+      return;
+    }
+
     const data = new FormData();
     const validVariants = variants
       .map((variant) => ({
@@ -234,17 +251,20 @@ const ProductFormPage = () => {
       data.append(`Variants[${index}].Quantity`, variant.quantity || '0');
     });
 
-    imageFiles.forEach((imageFile) => data.append('images', imageFile));
+    productImages
+      .filter((productImage) => !productImage.file)
+      .forEach((productImage, index) => {
+        data.append(`RetainedImageUrls[${index}]`, productImage.previewUrl);
+      });
+    productImages
+      .filter((productImage): productImage is ProductImageDraft & { file: File } => Boolean(productImage.file))
+      .forEach((productImage) => data.append('images', productImage.file));
 
     try {
       if (isEditMode) {
         await updateProduct({ id: id!, formData: data }).unwrap();
         toast.success('Product updated successfully');
       } else {
-        if (!imageFiles.length) {
-          toast.error('At least one product image is required');
-          return;
-        }
         await addProduct(data).unwrap();
         toast.success('Product added successfully');
       }
@@ -596,34 +616,34 @@ const ProductFormPage = () => {
               Product images
             </h3>
             <div className="mt-5 grid min-h-80 place-items-center border-2 border-dashed border-[#d8cdbb] bg-[#fbfaf7] p-5 text-center">
-              {imagePreviews.length ? (
+              {productImages.length ? (
                 <div className="w-full">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {imagePreviews.map((imagePreview, index) => (
-                      <div key={`${imagePreview}-${index}`} className="relative overflow-hidden bg-white shadow-sm">
-                        <img src={imagePreview} alt={`Preview ${index + 1}`} className="h-48 w-full object-cover" />
-                        {imageFiles.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => removePreviewAtIndex(index)}
-                            className="absolute right-2 top-2 grid h-8 w-8 place-items-center bg-red-600 text-white"
-                          >
-                            x
-                          </button>
-                        )}
+                    {productImages.map((productImage, index) => (
+                      <div key={productImage.clientId} className="group relative overflow-hidden bg-white shadow-sm">
+                        <img src={productImage.previewUrl} alt={`Preview ${index + 1}`} className="h-48 w-full object-cover" />
+                        <button
+                          type="button"
+                          aria-label={`Remove product image ${index + 1}`}
+                          onClick={() => removePreviewAtIndex(index)}
+                          className="absolute right-2 top-2 grid h-8 w-8 place-items-center bg-red-600 text-white opacity-95 transition hover:bg-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                         {index === 0 && (
                           <span className="absolute left-2 top-2 bg-[#111827] px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white">
                             Primary
                           </span>
                         )}
+                        <span className="absolute bottom-2 left-2 bg-white/92 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#111827]">
+                          {productImage.file ? 'New' : 'Saved'}
+                        </span>
                       </div>
                     ))}
                   </div>
                   {isEditMode && (
                     <p className="mt-3 text-xs text-[#7c7467]">
-                      {imageFiles.length > 0
-                        ? 'These selected files will replace the current gallery when you save.'
-                        : 'This is the current gallery. Choose new files to replace it.'}
+                      Delete saved images or add new uploads, then save to publish the final gallery. The first image becomes primary.
                     </p>
                   )}
                 </div>

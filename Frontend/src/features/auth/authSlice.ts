@@ -83,11 +83,13 @@ const authSlice = createSlice({
       state.user = user;
       state.token = accessToken;
       state.isAuthenticated = true;
+      persistAuthState(state);
     },
     logout: (state) => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
+      persistAuthState(state);
     },
   },
 });

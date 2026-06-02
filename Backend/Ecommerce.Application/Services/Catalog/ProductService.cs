@@ -86,8 +86,9 @@ namespace Ecommerce.Application.Services.Catalog
                 Quantity = variant.Quantity,
                 CreatedAtUtc = DateTime.UtcNow
             }).ToList();
-            product.ProductImages = await BuildProductImagesAsync(
-                product.Id,
+            product.ProductImages ??= new List<ProductImage>();
+            await SyncProductImagesAsync(
+                product,
                 Array.Empty<string>(),
                 Array.Empty<string>(),
                 productDto.NewImageColors,
@@ -142,19 +143,14 @@ namespace Ecommerce.Application.Services.Catalog
 
             SyncProductVariants(product, normalizedVariants, category.CategoryName);
 
-            var galleryImages = await BuildProductImagesAsync(
-                product.Id,
+            product.ProductImages ??= new List<ProductImage>();
+            await SyncProductImagesAsync(
+                product,
                 productDto.RetainedImageUrls,
                 productDto.RetainedImageColors,
                 productDto.NewImageColors,
                 images,
                 normalizedColors);
-
-            product.ProductImages.Clear();
-            foreach (var galleryImage in galleryImages)
-            {
-                product.ProductImages.Add(galleryImage);
-            }
             product.Image = product.ProductImages[0].ImageUrl;
 
             _productRepo.Update(product);
@@ -514,8 +510,8 @@ namespace Ecommerce.Application.Services.Catalog
             return $"{slug}-{suffix}";
         }
 
-        private async Task<List<ProductImage>> BuildProductImagesAsync(
-            Guid productId,
+        private async Task SyncProductImagesAsync(
+            Product product,
             IReadOnlyCollection<string> retainedImageUrls,
             IReadOnlyCollection<string> retainedImageColors,
             IReadOnlyCollection<string> newImageColors,
@@ -526,7 +522,15 @@ namespace Ecommerce.Application.Services.Catalog
             var retainedUrls = retainedImageUrls?.ToList() ?? new List<string>();
             var retainedColorsList = retainedImageColors?.ToList() ?? new List<string>();
             var newImageColorsList = newImageColors?.ToList() ?? new List<string>();
-            var galleryImages = new List<ProductImage>();
+
+            var imagesToRemove = product.ProductImages
+                .Where(pi => !retainedUrls.Contains(pi.ImageUrl, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var image in imagesToRemove)
+            {
+                product.ProductImages.Remove(image);
+            }
 
             for (var index = 0; index < retainedUrls.Count; index++)
             {
@@ -536,38 +540,48 @@ namespace Ecommerce.Application.Services.Catalog
                     continue;
                 }
 
-                galleryImages.Add(new ProductImage
+                var existingImage = product.ProductImages.FirstOrDefault(pi => pi.ImageUrl.Equals(imageUrl, StringComparison.OrdinalIgnoreCase));
+                var newColor = NormalizeImageColor(index < retainedColorsList.Count ? retainedColorsList[index] : null, allowedColors);
+
+                if (existingImage != null)
                 {
-                    Id = Guid.NewGuid(),
-                    ProductId = productId,
-                    ImageUrl = imageUrl,
-                    Color = NormalizeImageColor(index < retainedColorsList.Count ? retainedColorsList[index] : null, allowedColors),
-                    DisplayOrder = galleryImages.Count,
-                    IsPrimary = galleryImages.Count == 0
-                });
+                    existingImage.DisplayOrder = index;
+                    existingImage.IsPrimary = (index == 0);
+                    existingImage.Color = newColor;
+                }
+                else
+                {
+                    product.ProductImages.Add(new ProductImage
+                    {
+                        Id = Guid.NewGuid(),
+                        ProductId = product.Id,
+                        ImageUrl = imageUrl,
+                        Color = newColor,
+                        DisplayOrder = index,
+                        IsPrimary = (index == 0)
+                    });
+                }
             }
 
             if (hasNewUploads)
             {
                 var uploadedImages = await UploadProductImagesAsync(
-                    productId,
+                    product.Id,
                     uploadedFiles ?? Array.Empty<IFormFile>(),
                     newImageColorsList,
                     allowedColors,
-                    galleryImages.Count);
+                    retainedUrls.Count);
                 foreach (var uploadedImage in uploadedImages.Where(image => image != null))
                 {
-                    uploadedImage.IsPrimary = galleryImages.Count == 0;
-                    galleryImages.Add(uploadedImage);
+                    uploadedImage.IsPrimary = product.ProductImages.Count == 0;
+                    product.ProductImages.Add(uploadedImage);
                 }
             }
 
-            if (galleryImages.Count == 0)
+            if (product.ProductImages.Count == 0)
             {
                 throw new ArgumentException("At least one product image is required.");
             }
-
-            return galleryImages;
         }
 
         private static string? NormalizeImageColor(string? value, IReadOnlyCollection<string> allowedColors)

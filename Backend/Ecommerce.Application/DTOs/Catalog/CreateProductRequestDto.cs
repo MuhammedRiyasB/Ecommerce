@@ -44,6 +44,12 @@ namespace Ecommerce.Application.DTOs.Catalog
         public string? Material { get; set; }
 
         /// <summary>
+        /// Existing product image URLs that should remain on update.
+        /// New uploads are appended after these images in the same request.
+        /// </summary>
+        public List<string> RetainedImageUrls { get; set; } = new();
+
+        /// <summary>
         /// ID of the root category (e.g., "Top Wear").
         /// </summary>
         public int CategoryId { get; set; }

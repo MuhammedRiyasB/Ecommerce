@@ -141,13 +141,20 @@ namespace Ecommerce.Application.Services.Catalog
             product.UpdatedAtUtc = DateTime.UtcNow;
 
             SyncProductVariants(product, normalizedVariants, category.CategoryName);
-            product.ProductImages = await BuildProductImagesAsync(
+
+            var galleryImages = await BuildProductImagesAsync(
                 product.Id,
                 productDto.RetainedImageUrls,
                 productDto.RetainedImageColors,
                 productDto.NewImageColors,
                 images,
                 normalizedColors);
+
+            product.ProductImages.Clear();
+            foreach (var galleryImage in galleryImages)
+            {
+                product.ProductImages.Add(galleryImage);
+            }
             product.Image = product.ProductImages[0].ImageUrl;
 
             _productRepo.Update(product);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDeleteProductMutation, useGetProductsQuery } from '../catalog/catalogApiSlice';
-import { Edit, Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 const formatCurrency = (amount: number) =>
@@ -114,24 +114,15 @@ const ProductManagementPage = () => {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <div className="inline-flex gap-2">
-                          <Link
-                            to={`/admin/products/${product.id}/edit`}
-                            className="grid h-9 w-9 place-items-center border border-[#d8cdbb] text-[#111827] hover:border-[#9d731e] hover:text-[#9d731e]"
-                            title="Edit product"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(product.id, product.productName)}
-                            disabled={isDeleting}
-                            className="grid h-9 w-9 place-items-center border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                            title="Delete product"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(product.id, product.productName)}
+                          disabled={isDeleting}
+                          className="grid h-9 w-9 place-items-center border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          title="Delete product"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </td>
                     </tr>
                   ))

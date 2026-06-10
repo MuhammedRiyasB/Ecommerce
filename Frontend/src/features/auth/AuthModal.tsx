@@ -21,7 +21,22 @@ const isPlaceholderEmail = (email?: string) =>
   !email || email.endsWith('@mobile.urbaniq.local');
 
 const getApiError = (error: unknown, fallback: string) => {
-  const apiError = error as { data?: { message?: string; title?: string } };
+  const apiError = error as { 
+    data?: { 
+      message?: string; 
+      title?: string; 
+      errors?: Record<string, string[]> 
+    } 
+  };
+
+  // Extract FluentValidation specific errors first
+  if (apiError.data?.errors) {
+    const errorMessages = Object.values(apiError.data.errors).flat();
+    if (errorMessages.length > 0) {
+      return errorMessages[0];
+    }
+  }
+
   return apiError.data?.message || apiError.data?.title || fallback;
 };
 

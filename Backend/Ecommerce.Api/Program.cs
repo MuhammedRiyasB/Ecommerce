@@ -24,6 +24,7 @@ builder.Host.UseSerilog((context, config) =>
 // ===================== Settings =====================
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<RazorPaySettings>(builder.Configuration.GetSection("RazorPaySettings"));
+builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("StripeSettings"));
 
 // ===================== Clean Architecture Layer Registrations =====================
 builder.Services.AddApplication();                              // Application layer — services, validators

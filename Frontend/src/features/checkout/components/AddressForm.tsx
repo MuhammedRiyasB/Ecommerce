@@ -23,6 +23,7 @@ const AddressForm: React.FC<AddressFormProps> = ({ initialData, onSuccess, onCan
     postOffice: '',
     landMark: '',
   });
+  const [errors, setErrors] = useState<Partial<Record<keyof CreateAddressRequest, string>>>({});
 
   useEffect(() => {
     if (initialData) {
@@ -45,18 +46,59 @@ const AddressForm: React.FC<AddressFormProps> = ({ initialData, onSuccess, onCan
         ? value.replace(/\D/g, '').slice(0, name === 'phoneNumber' ? 10 : 6)
         : value;
     setForm({ ...form, [name]: normalizedValue });
+    setErrors((current) => ({ ...current, [name]: undefined }));
+  };
+
+  const validateForm = () => {
+    const nextErrors: Partial<Record<keyof CreateAddressRequest, string>> = {};
+    const trimmedForm = Object.fromEntries(
+      Object.entries(form).map(([key, value]) => [key, value.trim()])
+    ) as CreateAddressRequest;
+
+    if (!/^[A-Za-z][A-Za-z\s.'-]{1,99}$/.test(trimmedForm.fullName)) {
+      nextErrors.fullName = 'Enter a valid full name.';
+    }
+    if (!/^\d{10}$/.test(trimmedForm.phoneNumber)) {
+      nextErrors.phoneNumber = 'Phone number must be 10 digits.';
+    }
+    if (!/^\d{6}$/.test(trimmedForm.pincode)) {
+      nextErrors.pincode = 'Pincode must be 6 digits.';
+    }
+    if (!trimmedForm.houseName || trimmedForm.houseName.length > 200) {
+      nextErrors.houseName = 'House / flat details are required.';
+    }
+    if (!/^[A-Za-z][A-Za-z\s.'-]{1,99}$/.test(trimmedForm.place)) {
+      nextErrors.place = 'Enter a valid city or town.';
+    }
+    if (!trimmedForm.postOffice || trimmedForm.postOffice.length > 100) {
+      nextErrors.postOffice = 'Post office is required.';
+    }
+    if (!trimmedForm.landMark || trimmedForm.landMark.length > 200) {
+      nextErrors.landMark = 'Landmark is required.';
+    }
+
+    setErrors(nextErrors);
+    return {
+      isValid: Object.keys(nextErrors).length === 0,
+      value: trimmedForm,
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateForm();
+    if (!validation.isValid) {
+      toast.error('Please fix the highlighted address fields.');
+      return;
+    }
 
     try {
       if (initialData) {
-        const response = await updateAddress({ addressId: initialData.addressId, body: form }).unwrap();
+        const response = await updateAddress({ addressId: initialData.addressId, body: validation.value }).unwrap();
         toast.success('Address updated successfully');
         onSuccess(response.data);
       } else {
-        const response = await addAddress(form).unwrap();
+        const response = await addAddress(validation.value).unwrap();
         toast.success('Address added successfully');
         onSuccess(response.data);
       }
@@ -96,8 +138,17 @@ const AddressForm: React.FC<AddressFormProps> = ({ initialData, onSuccess, onCan
               onChange={handleChange}
               placeholder={field.placeholder}
               required={field.required}
-              className="w-full px-3 py-2.5 border border-gray-200 text-sm focus:outline-none focus:border-teal-600 transition-colors"
+              aria-invalid={Boolean(errors[field.name])}
+              aria-describedby={errors[field.name] ? `${field.name}-error` : undefined}
+              className={`w-full px-3 py-2.5 border text-sm focus:outline-none transition-colors ${
+                errors[field.name] ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-teal-600'
+              }`}
             />
+            {errors[field.name] && (
+              <p id={`${field.name}-error`} className="mt-1 text-xs font-medium text-red-600">
+                {errors[field.name]}
+              </p>
+            )}
           </div>
         ))}
       </div>

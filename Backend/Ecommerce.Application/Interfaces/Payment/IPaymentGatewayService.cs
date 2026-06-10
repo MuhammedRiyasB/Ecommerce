@@ -1,3 +1,4 @@
+using Ecommerce.Application.DTOs.Payment;
 using Ecommerce.Domain.Common;
 
 namespace Ecommerce.Application.Interfaces.Payment
@@ -14,12 +15,12 @@ namespace Ecommerce.Application.Interfaces.Payment
         /// will convert to the smallest unit (e.g., cents/paise) internally.
         /// Returns the client_secret required by the frontend to confirm the payment.
         /// </summary>
-        Task<ApiResponse<string>> CreatePaymentIntentAsync(decimal amount);
+        Task<ApiResponse<PaymentIntentResponseDto>> CreatePaymentIntentAsync(decimal amount);
 
         /// <summary>
         /// Verifies a payment's status using its PaymentIntent ID.
         /// Used by the frontend/backend to confirm if payment succeeded.
         /// </summary>
-        Task<ApiResponse<bool>> VerifyPaymentAsync(string paymentIntentId);
+        Task<ApiResponse<PaymentVerificationResponseDto>> VerifyPaymentAsync(string paymentIntentId);
     }
 }

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CreditCard, Lock, XCircle } from 'lucide-react';
-import { useCreatePaymentIntentMutation, useVerifyPaymentMutation } from '../paymentApiSlice';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, CheckCircle, CreditCard, Lock, ShieldCheck, XCircle } from 'lucide-react';
+import { useCreatePaymentIntentMutation, useGetPaymentConfigQuery, useVerifyPaymentMutation } from '../paymentApiSlice';
 import { usePlaceOrderMutation } from '@/features/orders/orderApiSlice';
 import type { CartResponse } from '@/features/cart/cartApiSlice';
 import type { Address } from '../addressApiSlice';
@@ -13,10 +14,6 @@ import {
   initialCardFieldState,
   type CardFieldState,
 } from '../paymentCardValidation';
-
-const stripePromise = loadStripe(
-  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 'pk_test_TYooMQauvdEDq54NiTphI7jx'
-);
 
 export interface OrderSuccessDetails {
   cart: CartResponse;
@@ -90,11 +87,8 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
         const cardElement = activeElements!.getElement(CardElement);
         if (!cardElement) throw new Error('Card element not found');
 
-        const intentResult = await createPaymentIntent(finalAmount).unwrap();
-        const clientSecret =
-          typeof intentResult.data === 'string'
-            ? intentResult.data
-            : intentResult.data?.clientSecret;
+        const intentResult = await createPaymentIntent({ amount: finalAmount }).unwrap();
+        const clientSecret = intentResult.data?.clientSecret;
         if (!clientSecret) {
           toast.error('Could not start payment. Please try again.');
           setIsProcessing(false);
@@ -121,7 +115,10 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
           return;
         }
 
-        await verifyPayment(paymentIntent.id).unwrap();
+        const verification = await verifyPayment({ paymentIntentId: paymentIntent.id }).unwrap();
+        if (!verification.data?.isSuccessful) {
+          throw new Error('Payment verification failed. Please contact support if money was deducted.');
+        }
 
         await placeOrder({
           addressId,
@@ -148,7 +145,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
         });
       }
     } catch (error: any) {
-      const message = error?.data?.message || 'Payment failed. Please try again.';
+      const message = error?.data?.message || error?.message || 'Payment failed. Please try again.';
       setFailureMessage(message);
       toast.error(message);
     } finally {
@@ -158,10 +155,19 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
 
   if (failureMessage) {
     return (
-      <div className="border border-red-100 bg-white p-8 text-center sm:p-12">
-        <div className="mx-auto mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-full bg-red-50">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="border border-red-100 bg-white p-8 text-center sm:p-12"
+      >
+        <motion.div
+          initial={{ scale: 0.7 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+          className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-50"
+        >
           <XCircle className="h-10 w-10 text-red-500" />
-        </div>
+        </motion.div>
         <h2 className="mb-2 text-2xl font-black uppercase tracking-tight text-gray-900">Payment Failed</h2>
         <p className="mx-auto mb-8 max-w-sm text-sm text-gray-500">{failureMessage}</p>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
@@ -178,7 +184,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
             Review Order
           </button>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -200,6 +206,38 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
 
   return (
     <div className="space-y-6">
+      {isProcessing && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="border border-teal-100 bg-white p-6 text-center shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="relative mx-auto mb-5 flex h-20 w-20 items-center justify-center">
+            <motion.span
+              animate={{ scale: [1, 1.35, 1], opacity: [0.35, 0.05, 0.35] }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute inset-0 rounded-full bg-teal-200"
+            />
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+              className="absolute inset-2 rounded-full border-2 border-teal-600 border-t-transparent"
+            />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-teal-600 text-white">
+              <ShieldCheck className="h-6 w-6" />
+            </span>
+          </div>
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">
+            {paymentMethod === 'cod' ? 'Placing your order' : 'Processing secure payment'}
+          </h3>
+          <p className="mx-auto mt-2 max-w-sm text-xs text-gray-500">
+            Please keep this page open while we confirm the transaction and create your order.
+          </p>
+        </motion.div>
+      )}
+
       <div className="border border-gray-100 bg-white p-6">
         <h3 className="mb-5 text-xs font-black uppercase tracking-widest text-gray-900">Choose Payment Method</h3>
         <div className="space-y-3">
@@ -291,8 +329,8 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
         >
           {isProcessing ? (
             <>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Processing...
+              <CheckCircle className="h-4 w-4 animate-pulse" />
+              Processing
             </>
           ) : (
             paymentMethod === 'cod' ? 'Place Order (COD)' : `Pay Rs. ${finalAmount.toLocaleString()}`
@@ -308,6 +346,42 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
 };
 
 const PaymentForm: React.FC<PaymentFormProps> = (props) => {
+  const { data: paymentConfig, isLoading, isError } = useGetPaymentConfigQuery();
+  const stripePromise = useMemo(
+    () => (paymentConfig?.publishableKey ? loadStripe(paymentConfig.publishableKey) : null),
+    [paymentConfig?.publishableKey]
+  );
+
+  if (isLoading) {
+    return (
+      <div className="border border-gray-100 bg-white p-8 text-center">
+        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+        <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Loading secure payment</p>
+      </div>
+    );
+  }
+
+  if (isError || !stripePromise) {
+    return (
+      <div className="border border-red-100 bg-white p-8 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+          <XCircle className="h-8 w-8 text-red-500" />
+        </div>
+        <h2 className="mb-2 text-xl font-black uppercase tracking-tight text-gray-900">Payment Setup Failed</h2>
+        <p className="mx-auto mb-6 max-w-sm text-sm text-gray-500">
+          Stripe is not configured correctly. Please check the backend Stripe publishable and secret keys.
+        </p>
+        <button
+          type="button"
+          onClick={props.onBack}
+          className="border border-gray-300 px-8 py-3 text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:border-gray-400"
+        >
+          Review Order
+        </button>
+      </div>
+    );
+  }
+
   return (
     <Elements stripe={stripePromise}>
       <CheckoutForm {...props} />

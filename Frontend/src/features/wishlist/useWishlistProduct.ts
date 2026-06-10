@@ -37,7 +37,7 @@ export const useWishlistProduct = (productId: string | undefined) => {
 
     if (!token) {
       toast.error('Please login to save items to your wishlist');
-      navigate('/login', { state: { redirectTo: location.pathname } });
+      navigate(`${location.pathname}?auth=login&redirectTo=${encodeURIComponent(location.pathname)}`);
       return;
     }
 
@@ -54,7 +54,7 @@ export const useWishlistProduct = (productId: string | undefined) => {
       const apiError = error as { status?: number; data?: { message?: string } };
       if (apiError?.status === 401) {
         toast.error('Please login to save items to your wishlist');
-        navigate('/login', { state: { redirectTo: location.pathname } });
+        navigate(`${location.pathname}?auth=login&redirectTo=${encodeURIComponent(location.pathname)}`);
         return;
       }
       toast.error(apiError?.data?.message || 'Could not update wishlist');

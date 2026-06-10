@@ -45,7 +45,7 @@ const CheckoutPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) {
-      navigate('/login', { state: { redirectTo: '/checkout' } });
+      navigate('/?auth=login&redirectTo=%2Fcheckout');
     }
   }, [navigate, token]);
 

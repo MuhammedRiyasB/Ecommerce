@@ -25,7 +25,7 @@ const AccountPage: React.FC = () => {
 
   const handleLogout = () => {
     dispatch(logout());
-    navigate('/login');
+    navigate('/');
   };
 
   const referralCode = user?.name ? `URB-${user.name.replace(/\s+/g, '').slice(0, 6).toUpperCase()}10` : 'URB-FRIEND10';

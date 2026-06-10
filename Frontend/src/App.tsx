@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import MainLayout from './layouts/MainLayout';
@@ -24,13 +24,16 @@ import ProductFormPage from './features/admin/ProductFormPage';
 import OrderManagementPage from './features/admin/OrderManagementPage';
 import CategoryManagementPage from './features/admin/CategoryManagementPage';
 import UserManagementPage from './features/admin/UserManagementPage';
+import AdminLoginPage from './features/admin/AdminLoginPage';
 
 function App() {
+  const isAdminOrigin = typeof window !== 'undefined' && window.location.port === '5174';
+
   return (
     <>
       <Routes>
         <Route path="/" element={<MainLayout />}>
-          <Route index element={<Home />} />
+          <Route index element={isAdminOrigin ? <Navigate to="/admin" replace /> : <Home />} />
           <Route path="catalog" element={<ProductListPage />} />
           <Route path="product/:slug" element={<ProductDetailPage />} />
           <Route path="cart" element={<CartPage />} />
@@ -47,6 +50,8 @@ function App() {
             <Route path="wishlist" element={<WishlistPage />} />
           </Route>
         </Route>
+
+        <Route path="/admin-login" element={<AdminLoginPage />} />
 
         <Route element={<AdminRoute />}>
           <Route path="/admin" element={<AdminLayout />}>

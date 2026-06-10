@@ -56,7 +56,7 @@ const ForgotPasswordPage: React.FC = () => {
     try {
       await resetPassword({ email, code, newPassword }).unwrap();
       toast.success('Password reset successful! Please log in.');
-      navigate('/login');
+      navigate('/?auth=login');
     } catch (err) {
       const error = err as { data?: { message?: string } };
       toast.error(error.data?.message || 'Failed to reset password');
@@ -108,7 +108,7 @@ const ForgotPasswordPage: React.FC = () => {
             </button>
 
             <div className="text-center text-sm">
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              <Link to="/?auth=login" className="font-medium text-primary hover:underline">
                 Back to sign in
               </Link>
             </div>

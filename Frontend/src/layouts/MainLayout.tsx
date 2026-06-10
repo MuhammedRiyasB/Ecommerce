@@ -1,8 +1,9 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Heart, Search, ShoppingBag, User } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { selectCartCount } from '../features/cart/cartSlice';
 import { selectCurrentUser, selectIsAuthenticated } from '../features/auth/authSlice';
+import AuthModal from '../features/auth/AuthModal';
 
 const navItems = [
   { label: 'New Arrivals', href: '/catalog' },
@@ -15,7 +16,26 @@ export default function MainLayout() {
   const cartCount = useSelector(selectCartCount);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user = useSelector(selectCurrentUser);
-  const accountHref = isAuthenticated ? (user?.role === 'Admin' ? '/admin' : '/account') : '/login';
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isAuthModalOpen = searchParams.get('auth') === 'login' && !isAuthenticated;
+  const redirectTo = searchParams.get('redirectTo') || location.pathname;
+
+  const openAuthModal = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('auth', 'login');
+    nextParams.set('redirectTo', location.pathname);
+    navigate(`${location.pathname}?${nextParams.toString()}`, { replace: false });
+  };
+
+  const closeAuthModal = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('auth');
+    nextParams.delete('redirectTo');
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#111827]">
@@ -57,13 +77,24 @@ export default function MainLayout() {
             >
               <Heart className="h-4 w-4" />
             </Link>
-            <Link
-              to={accountHref}
-              className="grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
-              aria-label={isAuthenticated ? 'Account' : 'Sign in'}
-            >
-              <User className="h-4 w-4" />
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to={user?.role === 'Admin' ? '/admin' : '/account'}
+                className="grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
+                aria-label="Account"
+              >
+                <User className="h-4 w-4" />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={openAuthModal}
+                className="grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
+                aria-label="Sign in"
+              >
+                <User className="h-4 w-4" />
+              </button>
+            )}
             <Link
               to="/cart"
               className="relative grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-[#111827] text-white transition-colors hover:border-[#9d731e]"
@@ -83,6 +114,8 @@ export default function MainLayout() {
       <main>
         <Outlet />
       </main>
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} redirectTo={redirectTo} />
     </div>
   );
 }

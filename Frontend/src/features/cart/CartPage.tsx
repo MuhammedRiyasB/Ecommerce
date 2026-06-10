@@ -241,7 +241,7 @@ const CartPage: React.FC = () => {
               <button
                 onClick={() => {
                   if (!token) {
-                    navigate('/login', { state: { redirectTo: '/checkout' } });
+                    navigate('/?auth=login&redirectTo=%2Fcheckout');
                   } else {
                     navigate('/checkout');
                   }

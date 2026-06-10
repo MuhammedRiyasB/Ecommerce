@@ -18,6 +18,7 @@ namespace Ecommerce.Api.Mapping
         {
             CreateMap<RegisterRequestDto, User>()
                 .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Email.ToLower()))
+                .ForMember(dest => dest.PhoneNumber, opt => opt.Ignore())
                 .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())
                 .ForMember(dest => dest.UserId, opt => opt.Ignore())
                 .ForMember(dest => dest.Role, opt => opt.MapFrom(_ => UserRole.User));

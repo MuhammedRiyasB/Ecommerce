@@ -10,6 +10,7 @@ import CheckoutPage from './features/checkout/CheckoutPage';
 import LoginPage from './features/auth/LoginPage';
 import RegisterPage from './features/auth/RegisterPage';
 import ForgotPasswordPage from './features/auth/ForgotPasswordPage';
+import VerifyEmailPage from './features/auth/VerifyEmailPage';
 import UserRoute from './features/auth/UserRoute';
 import AccountPage from './features/account/AccountPage';
 import OrdersPage from './features/orders/OrdersPage';
@@ -36,6 +37,7 @@ function App() {
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
 
           <Route element={<UserRoute />}>
             <Route path="checkout" element={<CheckoutPage />} />

@@ -1,12 +1,27 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, LockKeyhole } from 'lucide-react';
+import { Loader2, LockKeyhole, Eye, EyeOff } from 'lucide-react';
 import { useLoginMutation } from '../auth/authApiSlice';
 import { setCredentials } from '../auth/authSlice';
 
 const getApiError = (error: unknown, fallback: string) => {
-  const apiError = error as { data?: { message?: string; title?: string } };
+  const apiError = error as { 
+    data?: { 
+      message?: string; 
+      title?: string; 
+      errors?: Record<string, string[]> 
+    } 
+  };
+
+  // Extract FluentValidation specific errors first
+  if (apiError.data?.errors) {
+    const errorMessages = Object.values(apiError.data.errors).flat();
+    if (errorMessages.length > 0) {
+      return errorMessages[0];
+    }
+  }
+
   return apiError.data?.message || apiError.data?.title || fallback;
 };
 
@@ -16,6 +31,7 @@ const AdminLoginPage: React.FC = () => {
   const [login, { isLoading }] = useLoginMutation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -63,14 +79,23 @@ const AdminLoginPage: React.FC = () => {
 
           <label className="block">
             <span className="text-xs font-black uppercase tracking-[0.18em] text-[#9ba4b5]">Password</span>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              autoComplete="current-password"
-              className="mt-2 h-12 w-full border border-[#384257] bg-[#111827] px-4 text-sm text-white outline-none focus:border-[#d7b46a]"
-              required
-            />
+            <div className="relative mt-2">
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="h-12 w-full border border-[#384257] bg-[#111827] px-4 pr-12 text-sm text-white outline-none focus:border-[#d7b46a]"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#9ba4b5] hover:text-[#d7b46a] focus:outline-none"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </label>
         </div>
 

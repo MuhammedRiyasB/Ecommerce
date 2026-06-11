@@ -26,7 +26,7 @@ public class CartControllerTests : IClassFixture<CustomWebAppFactory>
     /// </summary>
     private async Task<string> GetAuthTokenAsync()
     {
-        var email = $"cart_test_{Guid.NewGuid():N}@test.com";
+        var email = $"cart_test_{Guid.NewGuid():N}@gmail.com";
 
         await _client.PostAsJsonAsync("/api/v1/Auth/register", new
         {

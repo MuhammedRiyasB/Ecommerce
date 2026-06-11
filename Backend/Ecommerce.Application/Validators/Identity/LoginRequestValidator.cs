@@ -7,7 +7,11 @@ namespace Ecommerce.Application.Validators.Identity
     {
         public LoginRequestValidator()
         {
-            RuleFor(x => x.Email).NotEmpty().EmailAddress();
+            RuleFor(x => x.Email)
+                .NotEmpty().WithMessage("Email is required")
+                .EmailAddress().WithMessage("Invalid email format")
+                .Must(email => email != null && email.EndsWith("@gmail.com", System.StringComparison.OrdinalIgnoreCase))
+                .WithMessage("Email must be a @gmail.com address");
             RuleFor(x => x.Password).NotEmpty().MinimumLength(8).MaximumLength(20);
         }
     }

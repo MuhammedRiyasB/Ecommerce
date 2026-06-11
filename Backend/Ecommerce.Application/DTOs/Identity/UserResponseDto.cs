@@ -4,6 +4,7 @@ namespace Ecommerce.Application.DTOs.Identity
     {
         public Guid UserId { get; set; }
         public string Name { get; set; } = null!;
+        public int? Age { get; set; }
         public string Email { get; set; } = null!;
         public string? PhoneNumber { get; set; }
         public string Role { get; set; } = null!;

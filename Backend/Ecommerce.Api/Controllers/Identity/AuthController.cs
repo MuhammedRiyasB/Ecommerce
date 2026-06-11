@@ -56,9 +56,21 @@ namespace Ecommerce.Api.Controllers.Identity
         public async Task<IActionResult> SendEmailVerification([FromBody] SendEmailVerificationRequestDto dto)
         {
             if (dto == null) return BadRequest(new { message = "Email is required." });
-            var userId = GetCurrentUserId();
-            await _authService.SendEmailVerificationAsync(userId, dto);
-            return Ok(new { message = "Verification link has been sent to your email." });
+            
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _authService.SendEmailVerificationAsync(userId, dto);
+                return Ok(new { message = "Verification link has been sent to your email." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return BadRequest(new { message = "Failed to send verification email. Please check that your email address is correct and try again." });
+            }
         }
 
         [HttpPost("email-verification/verify")]
@@ -129,6 +141,24 @@ namespace Ecommerce.Api.Controllers.Identity
             {
                 await _authService.ResetPasswordAsync(dto);
                 return Ok(new { message = "Password has been reset successfully. You can now log in with your new password." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Invalid profile data." });
+            
+            try
+            {
+                var userId = GetCurrentUserId();
+                var user = await _authService.UpdateProfileAsync(userId, dto);
+                return Ok(new { message = "Profile updated successfully.", data = user });
             }
             catch (ArgumentException ex)
             {

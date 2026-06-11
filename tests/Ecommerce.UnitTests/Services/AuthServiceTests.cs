@@ -5,6 +5,7 @@ using AutoMapper;
 using Ecommerce.Application.Common.Settings;
 using Ecommerce.Application.DTOs.Identity;
 using Ecommerce.Application.Interfaces.Email;
+using Ecommerce.Application.Interfaces.Sms;
 using Ecommerce.Application.Services.Identity;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Enums;
@@ -28,6 +29,7 @@ public class AuthServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IMapper> _mapperMock;
     private readonly Mock<IEmailSender> _emailSenderMock;
+    private readonly Mock<ISmsSender> _smsSenderMock;
     private readonly Mock<ILogger<AuthService>> _loggerMock;
     private readonly IOptions<JwtSettings> _jwtOptions;
     private readonly IOptions<EmailSettings> _emailOptions;
@@ -40,6 +42,7 @@ public class AuthServiceTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
         _emailSenderMock = new Mock<IEmailSender>();
+        _smsSenderMock = new Mock<ISmsSender>();
         _loggerMock = new Mock<ILogger<AuthService>>();
 
         // Configure JWT settings for token generation tests
@@ -68,6 +71,7 @@ public class AuthServiceTests
             _jwtOptions,
             _emailSenderMock.Object,
             _emailOptions,
+            _smsSenderMock.Object,
             _loggerMock.Object);
     }
 

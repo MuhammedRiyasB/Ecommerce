@@ -2,6 +2,7 @@ using Ecommerce.Application.Common.Settings;
 using Ecommerce.Application.Interfaces.Catalog;
 using Ecommerce.Application.Interfaces.Email;
 using Ecommerce.Application.Interfaces.Payment;
+using Ecommerce.Application.Interfaces.Sms;
 using Ecommerce.Domain.Interfaces;
 using Ecommerce.Infrastructure.Data;
 using Ecommerce.Infrastructure.Services;
@@ -55,6 +56,24 @@ namespace Ecommerce.Infrastructure
             services.AddSingleton<BackgroundEmailJobQueue>();
             services.AddSingleton<IEmailJobQueue>(provider => provider.GetRequiredService<BackgroundEmailJobQueue>());
             services.AddHostedService<QueuedEmailHostedService>();
+
+            // SMS Service - Twilio
+            services.Configure<SmsSettings>(configuration.GetSection("SmsSettings"));
+            var twilioAccountSid = configuration["SmsSettings:AccountSid"];
+            var twilioAuthToken = configuration["SmsSettings:AuthToken"];
+            var twilioFromNumber = configuration["SmsSettings:FromNumber"];
+
+            if (string.IsNullOrWhiteSpace(twilioAccountSid) ||
+                twilioAccountSid.Contains("SET_VIA_USER_SECRETS_OR_ENV_VAR", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(twilioAuthToken) ||
+                twilioAuthToken.Contains("SET_VIA_USER_SECRETS_OR_ENV_VAR", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddScoped<ISmsSender, LocalSmsSender>();
+            }
+            else
+            {
+                services.AddScoped<ISmsSender, TwilioSmsSender>();
+            }
 
             return services;
         }

@@ -1,15 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { Check, Loader2, Mail, Smartphone, X } from 'lucide-react';
+import { Check, Loader2, Smartphone, X } from 'lucide-react';
 import {
   useRequestPhoneOtpMutation,
-  useSendEmailVerificationMutation,
   useVerifyPhoneOtpMutation,
 } from './authApiSlice';
 import { setCredentials } from './authSlice';
 
-type AuthStep = 'MOBILE' | 'OTP' | 'EMAIL';
+type AuthStep = 'MOBILE' | 'OTP';
 
 type AuthModalProps = {
   isOpen: boolean;
@@ -28,14 +27,7 @@ const getApiError = (error: unknown, fallback: string) => {
 const maskPhoneNumber = (phoneNumber: string) =>
   phoneNumber.length < 4 ? phoneNumber : `${phoneNumber.slice(0, 4)}******`;
 
-const brandNames = [
-  'URBANIQ',
-  'ALLEN SOLLY',
-  'AMERICAN EAGLE',
-  'LOUIS PHILIPPE',
-  'PETER ENGLAND',
-  'VAN HEUSEN',
-];
+
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/' }) => {
   const dispatch = useDispatch();
@@ -43,13 +35,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/'
   const [step, setStep] = useState<AuthStep>('MOBILE');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [email, setEmail] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [requestPhoneOtp, { isLoading: isRequestingOtp }] = useRequestPhoneOtpMutation();
   const [verifyPhoneOtp, { isLoading: isVerifyingOtp }] = useVerifyPhoneOtpMutation();
-  const [sendEmailVerification, { isLoading: isSendingEmail }] = useSendEmailVerificationMutation();
 
   useEffect(() => {
     if (!isOpen) {
@@ -71,27 +61,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/'
     };
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (step !== 'EMAIL' || email || typeof navigator === 'undefined') {
-      return;
-    }
 
-    const credentials = (navigator as Navigator & {
-      credentials?: {
-        get?: (options: Record<string, unknown>) => Promise<{ id?: string } | null>;
-      };
-    }).credentials;
-
-    void credentials?.get?.({ password: true, mediation: 'optional' })
-      .then((credential) => {
-        if (credential?.id?.includes('@')) {
-          setEmail(credential.id);
-        }
-      })
-      .catch(() => {
-        // Browser credential access is optional; normal email autofill remains available.
-      });
-  }, [email, step]);
 
   if (!isOpen) {
     return null;
@@ -137,12 +107,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/'
       const response = await verifyPhoneOtp({ phoneNumber, code: otp }).unwrap();
       dispatch(setCredentials(response));
 
-      if (!response.user.isEmailVerified) {
-        setEmail(isPlaceholderEmail(response.user.email) ? '' : response.user.email);
-        setStep('EMAIL');
-        return;
-      }
-
       onClose();
       navigate(redirectTo);
     } catch (verifyError) {
@@ -150,23 +114,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/'
     }
   };
 
-  const handleSendEmailLink = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setMessage(null);
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Enter a valid email address.');
-      return;
-    }
-
-    try {
-      await sendEmailVerification({ email }).unwrap();
-      setMessage('Verification link sent. Open the link from your email to verify it.');
-    } catch (sendError) {
-      setError(getApiError(sendError, 'Unable to send verification link.'));
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/55 px-4 py-8 backdrop-blur-[2px]">
@@ -275,73 +223,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, redirectTo = '/'
               </form>
             )}
 
-            {step === 'EMAIL' && (
-              <form onSubmit={handleSendEmailLink} className="mx-auto max-w-[560px] pt-2">
-                <h1 className="font-heading text-2xl font-semibold text-black">Please Verify Your Email Address</h1>
-                <div className="mt-6 border-t border-stone-200 pt-6">
-                  <p className="text-lg leading-6 text-black">
-                    Verify your email for an uninterrupted shopping experience. Please click the authentication link
-                    in your inbox to proceed.
-                  </p>
-                  <div className="mt-5 flex h-[56px] items-center border border-stone-400 px-4">
-                    <Mail className="mr-3 h-5 w-5 text-stone-500" />
-                    <input
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      type="email"
-                      autoComplete="email"
-                      placeholder="name@example.com"
-                      className="h-full min-w-0 flex-1 border-0 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
-                {message && <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p>}
-
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <button
-                    type="submit"
-                    disabled={isSendingEmail}
-                    className="h-[56px] border border-stone-500 bg-white font-bold transition hover:border-black"
-                  >
-                    {isSendingEmail ? 'Sending...' : 'Send Link'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      navigate(redirectTo);
-                    }}
-                    className="h-[56px] bg-black font-bold text-[#d4a72c] transition hover:bg-stone-900"
-                  >
-                    Continue Shopping
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-
-          {step === 'MOBILE' && (
-            <div className="border-t border-stone-200 bg-stone-50 px-8 py-7 sm:px-16">
-              <div className="text-center text-sm text-black">OR</div>
-              <div className="mt-4 flex justify-center">
-                <button
-                  type="button"
-                  className="h-10 border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-800"
-                >
-                  Continue with Google
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="border-t border-stone-200 bg-white px-8 py-7 sm:px-16">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-5 text-center text-xs font-bold tracking-[0.18em] text-black sm:grid-cols-3">
-              {brandNames.map((brand) => (
-                <span key={brand}>{brand}</span>
-              ))}
-            </div>
           </div>
         </div>
       </div>

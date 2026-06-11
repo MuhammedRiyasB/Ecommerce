@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { selectCartCount } from '../features/cart/cartSlice';
 import { selectCurrentUser, selectIsAuthenticated } from '../features/auth/authSlice';
 import AuthModal from '../features/auth/AuthModal';
+import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 
 const navItems = [
   { label: 'New Arrivals', href: '/catalog' },
@@ -116,6 +117,7 @@ export default function MainLayout() {
       </main>
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} redirectTo={redirectTo} />
+      <VerifyEmailPromptModal />
     </div>
   );
 }

@@ -6,6 +6,7 @@ namespace Ecommerce.Domain.Entities
     {
         public Guid UserId { get; set; }
         public string Name { get; set; } = null!;
+        public int? Age { get; set; }
         public string Email { get; set; } = null!;
         public string PasswordHash { get; set; } = null!;
         public string? PhoneNumber { get; set; }

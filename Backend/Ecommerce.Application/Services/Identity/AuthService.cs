@@ -2,6 +2,7 @@ using AutoMapper;
 using Ecommerce.Application.DTOs.Identity;
 using Ecommerce.Application.Interfaces.Email;
 using Ecommerce.Application.Interfaces.Identity;
+using Ecommerce.Application.Interfaces.Sms;
 using Ecommerce.Application.Common.Settings;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Enums;
@@ -31,6 +32,7 @@ namespace Ecommerce.Application.Services.Identity
         private readonly JwtSettings _jwtSettings;
         private readonly IEmailSender _emailSender;
         private readonly EmailSettings _emailSettings;
+        private readonly ISmsSender _smsSender;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
@@ -41,6 +43,7 @@ namespace Ecommerce.Application.Services.Identity
             IOptions<JwtSettings> jwtSettings,
             IEmailSender emailSender,
             IOptions<EmailSettings> emailSettings,
+            ISmsSender smsSender,
             ILogger<AuthService> logger)
         {
             _userRepo = userRepo;
@@ -50,6 +53,7 @@ namespace Ecommerce.Application.Services.Identity
             _jwtSettings = jwtSettings.Value;
             _emailSender = emailSender;
             _emailSettings = emailSettings.Value;
+            _smsSender = smsSender;
             _logger = logger;
         }
 
@@ -112,9 +116,7 @@ namespace Ecommerce.Application.Services.Identity
             _userRepo.Update(user);
             await _unitOfWork.SaveChangesAsync();
 
-            // Replace this logger-backed delivery with an SMS gateway implementation before production rollout.
-            _logger.LogInformation("[Auth] Phone OTP issued for mobile ending {LastFour}.", MaskPhoneNumber(phoneNumber));
-            _logger.LogWarning("[Auth][Development] OTP for {PhoneNumber}: {OtpCode}", phoneNumber, otpCode);
+            await _smsSender.SendSmsAsync(phoneNumber, $"Your Urbaniq OTP is: {otpCode}. It is valid for {PhoneOtpExpiryMinutes} minutes.");
         }
 
         public async Task<AuthResponseDto> VerifyPhoneOtpAsync(VerifyPhoneOtpRequestDto dto)
@@ -343,6 +345,33 @@ namespace Ecommerce.Application.Services.Identity
             }
         }
 
+        public async Task<UserResponseDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto dto)
+        {
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                throw new ArgumentException("User not found");
+
+            user.Name = dto.Name;
+            user.Age = dto.Age;
+
+            var normalizedEmail = NormalizeOptionalEmail(dto.Email);
+            if (normalizedEmail != null && user.Email != normalizedEmail)
+            {
+                // Verify email uniqueness
+                var emailExists = await _userRepo.Query().AnyAsync(u => u.Email == normalizedEmail && u.UserId != userId);
+                if (emailExists)
+                    throw new ArgumentException("Email already in use by another account");
+
+                user.Email = normalizedEmail;
+                user.IsEmailVerified = false;
+            }
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<UserResponseDto>(user);
+        }
+
         // ─────────────────────────────────────────────────────────────
         // Private helpers
         // ─────────────────────────────────────────────────────────────
@@ -526,9 +555,24 @@ namespace Ecommerce.Application.Services.Identity
             </div>";
         }
 
+        /// <summary>
+        /// Normalizes a phone number to E.164 format (+91XXXXXXXXXX).
+        /// Accepts raw 10-digit input or numbers already prefixed with country code.
+        /// </summary>
         private static string NormalizePhoneNumber(string phoneNumber)
         {
-            return new string(phoneNumber.Where(char.IsDigit).ToArray());
+            var digitsOnly = new string(phoneNumber.Where(char.IsDigit).ToArray());
+
+            // If already includes country code (e.g., 917561867594), ensure + prefix
+            if (digitsOnly.Length == 12 && digitsOnly.StartsWith("91"))
+                return $"+{digitsOnly}";
+
+            // Standard 10-digit Indian mobile number — prepend +91
+            if (digitsOnly.Length == 10)
+                return $"+91{digitsOnly}";
+
+            // Fallback: return with + prefix for any other international format
+            return $"+{digitsOnly}";
         }
 
         private static string? NormalizeOptionalEmail(string? email)

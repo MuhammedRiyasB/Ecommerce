@@ -26,7 +26,7 @@ public class ProductControllerTests : IClassFixture<CustomWebAppFactory>
     /// </summary>
     private async Task<string> GetUserTokenAsync(string role = "User")
     {
-        var email = $"product_test_{Guid.NewGuid():N}@test.com";
+        var email = $"product_test_{Guid.NewGuid():N}@gmail.com";
 
         // Register
         await _client.PostAsJsonAsync("/api/v1/Auth/register", new

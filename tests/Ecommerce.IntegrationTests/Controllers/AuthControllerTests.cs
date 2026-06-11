@@ -29,7 +29,7 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
         var request = new
         {
             name = "Integration User",
-            email = $"integration_{Guid.NewGuid():N}@test.com", // Unique email per test run
+            email = $"integration_{Guid.NewGuid():N}@gmail.com", // Unique email per test run
             password = "Password123!"
         };
 
@@ -46,7 +46,7 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
     public async Task Register_DuplicateEmail_Returns400()
     {
         // Arrange — register a user first
-        var email = $"duplicate_{Guid.NewGuid():N}@test.com";
+        var email = $"duplicate_{Guid.NewGuid():N}@gmail.com";
         var request = new { name = "First User", email, password = "Password123!" };
 
         await _client.PostAsJsonAsync("/api/v1/Auth/register", request);
@@ -65,7 +65,7 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
     public async Task Login_ValidCredentials_ReturnsTokens()
     {
         // Arrange — create a user first
-        var email = $"login_{Guid.NewGuid():N}@test.com";
+        var email = $"login_{Guid.NewGuid():N}@gmail.com";
         await _client.PostAsJsonAsync("/api/v1/Auth/register", new
         {
             name = "Login User", email, password = "Password123!"
@@ -91,7 +91,7 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
     public async Task Login_InvalidPassword_Returns400()
     {
         // Arrange — create a user
-        var email = $"wrongpass_{Guid.NewGuid():N}@test.com";
+        var email = $"wrongpass_{Guid.NewGuid():N}@gmail.com";
         await _client.PostAsJsonAsync("/api/v1/Auth/register", new
         {
             name = "Wrong Pass User", email, password = "CorrectPassword123!"

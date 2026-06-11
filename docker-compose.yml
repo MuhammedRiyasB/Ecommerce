@@ -16,6 +16,9 @@ services:
       - Jwt__Key=${JWT_SECRET_KEY}
       - AdminSettings__Email=${ADMIN_EMAIL}
       - AdminSettings__Password=${ADMIN_PASSWORD}
+      - SmsSettings__TwilioAccountSid=${TWILIO_ACCOUNT_SID}
+      - SmsSettings__TwilioAuthToken=${TWILIO_AUTH_TOKEN}
+      - SmsSettings__TwilioFromNumber=${TWILIO_FROM_NUMBER}
 
   nginx:
     image: nginx:alpine

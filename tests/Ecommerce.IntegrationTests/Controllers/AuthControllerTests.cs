@@ -37,8 +37,8 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
         var response = await _client.PostAsJsonAsync("/api/v1/Auth/register", request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "Response Body: " + content);
         content.Should().NotBeNullOrEmpty();
     }
 
@@ -77,10 +77,8 @@ public class AuthControllerTests : IClassFixture<CustomWebAppFactory>
             email, password = "Password123!"
         });
 
-        // Assert
-        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
         var content = await loginResponse.Content.ReadAsStringAsync();
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK, "Response Body: " + content);
         var json = JsonSerializer.Deserialize<JsonElement>(content, _jsonOptions);
 
         json.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();

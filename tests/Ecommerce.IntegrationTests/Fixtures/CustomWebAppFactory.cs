@@ -1,5 +1,6 @@
 using Ecommerce.Application.Interfaces.Catalog;
 using Ecommerce.Application.Interfaces.Payment;
+using Ecommerce.Application.DTOs.Payment;
 using Ecommerce.Domain.Common;
 using Ecommerce.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -72,19 +73,27 @@ public class CustomWebAppFactory : WebApplicationFactory<Program>
             var stripeMock = new Mock<IPaymentGatewayService>();
             stripeMock
                 .Setup(s => s.CreatePaymentIntentAsync(It.IsAny<decimal>()))
-                .ReturnsAsync(new ApiResponse<string>
+                .ReturnsAsync(new ApiResponse<PaymentIntentResponseDto>
                 {
                     StatusCode = 200,
                     Message = "Payment Intent created",
-                    Data = "pi_test_secret_mock_12345"
+                    Data = new PaymentIntentResponseDto
+                    {
+                        ClientSecret = "pi_test_secret_mock_12345",
+                        PaymentIntentId = "pi_test_mock_12345"
+                    }
                 });
             stripeMock
                 .Setup(s => s.VerifyPaymentAsync(It.IsAny<string>()))
-                .ReturnsAsync(new ApiResponse<bool>
+                .ReturnsAsync(new ApiResponse<PaymentVerificationResponseDto>
                 {
                     StatusCode = 200,
                     Message = "Payment verified successfully",
-                    Data = true
+                    Data = new PaymentVerificationResponseDto
+                    {
+                        Status = "succeeded",
+                        IsSuccessful = true
+                    }
                 });
 
             // Remove real Stripe service and replace with mock

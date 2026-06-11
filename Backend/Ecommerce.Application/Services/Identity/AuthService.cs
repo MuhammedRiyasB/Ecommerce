@@ -2,6 +2,7 @@ using AutoMapper;
 using Ecommerce.Application.DTOs.Identity;
 using Ecommerce.Application.Interfaces.Email;
 using Ecommerce.Application.Interfaces.Identity;
+using Ecommerce.Application.Interfaces.Sms;
 using Ecommerce.Application.Common.Settings;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Enums;
@@ -19,6 +20,11 @@ namespace Ecommerce.Application.Services.Identity
 {
     public class AuthService : IAuthService
     {
+        private const int PhoneOtpMaxAttempts = 3;
+        private const int PhoneOtpExpiryMinutes = 10;
+        private const int PhoneOtpLockoutMinutes = 60;
+        private const string PhoneOtpLockoutMessage = "Sorry, Number of attempts exhausted please try again after 1 hr.";
+
         private readonly IRepository<User> _userRepo;
         private readonly IRepository<RefreshToken> _refreshTokenRepo;
         private readonly IUnitOfWork _unitOfWork;
@@ -26,6 +32,7 @@ namespace Ecommerce.Application.Services.Identity
         private readonly JwtSettings _jwtSettings;
         private readonly IEmailSender _emailSender;
         private readonly EmailSettings _emailSettings;
+        private readonly ISmsSender _smsSender;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
@@ -36,6 +43,7 @@ namespace Ecommerce.Application.Services.Identity
             IOptions<JwtSettings> jwtSettings,
             IEmailSender emailSender,
             IOptions<EmailSettings> emailSettings,
+            ISmsSender smsSender,
             ILogger<AuthService> logger)
         {
             _userRepo = userRepo;
@@ -45,6 +53,7 @@ namespace Ecommerce.Application.Services.Identity
             _jwtSettings = jwtSettings.Value;
             _emailSender = emailSender;
             _emailSettings = emailSettings.Value;
+            _smsSender = smsSender;
             _logger = logger;
         }
 
@@ -85,6 +94,134 @@ namespace Ecommerce.Application.Services.Identity
                 throw new ArgumentException("Invalid email or password");
 
             return await GenerateAuthResponseAsync(user);
+        }
+
+        public async Task RequestPhoneOtpAsync(RequestPhoneOtpRequestDto dto)
+        {
+            var phoneNumber = NormalizePhoneNumber(dto.PhoneNumber);
+            var normalizedEmail = NormalizeOptionalEmail(dto.Email);
+            var user = await ResolvePhoneUserAsync(phoneNumber, normalizedEmail);
+
+            if (user.PhoneOtpLockedUntilUtc > DateTime.UtcNow)
+                throw new InvalidOperationException(PhoneOtpLockoutMessage);
+
+            var otpCode = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+            user.PhoneOtpHash = ComputeSha256Hash(otpCode);
+            user.PhoneOtpExpiresUtc = DateTime.UtcNow.AddMinutes(PhoneOtpExpiryMinutes);
+            user.PhoneOtpFailedAttempts = 0;
+            user.PhoneOtpLockedUntilUtc = null;
+
+            await ApplyProfileDraftAsync(user, dto.Name, normalizedEmail);
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            await _smsSender.SendSmsAsync(phoneNumber, $"Your Urbaniq OTP is: {otpCode}. It is valid for {PhoneOtpExpiryMinutes} minutes.");
+        }
+
+        public async Task<AuthResponseDto> VerifyPhoneOtpAsync(VerifyPhoneOtpRequestDto dto)
+        {
+            var phoneNumber = NormalizePhoneNumber(dto.PhoneNumber);
+            var normalizedEmail = NormalizeOptionalEmail(dto.Email);
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+
+            if (user == null)
+                throw new ArgumentException("Please request a new OTP.");
+
+            if (user.IsBlocked)
+                throw new UnauthorizedAccessException("Your account has been blocked. Please contact support.");
+
+            if (user.PhoneOtpLockedUntilUtc > DateTime.UtcNow)
+                throw new InvalidOperationException(PhoneOtpLockoutMessage);
+
+            if (user.PhoneOtpHash == null || user.PhoneOtpExpiresUtc < DateTime.UtcNow)
+                throw new ArgumentException("Invalid or expired OTP.");
+
+            var incomingHash = ComputeSha256Hash(dto.Code);
+            if (user.PhoneOtpHash != incomingHash)
+            {
+                user.PhoneOtpFailedAttempts++;
+
+                if (user.PhoneOtpFailedAttempts >= PhoneOtpMaxAttempts)
+                {
+                    user.PhoneOtpLockedUntilUtc = DateTime.UtcNow.AddMinutes(PhoneOtpLockoutMinutes);
+                    user.PhoneOtpHash = null;
+                    user.PhoneOtpExpiresUtc = null;
+                    _userRepo.Update(user);
+                    await _unitOfWork.SaveChangesAsync();
+                    throw new InvalidOperationException(PhoneOtpLockoutMessage);
+                }
+
+                _userRepo.Update(user);
+                await _unitOfWork.SaveChangesAsync();
+                var attemptsLeft = PhoneOtpMaxAttempts - user.PhoneOtpFailedAttempts;
+                throw new ArgumentException($"Invalid OTP. You have {attemptsLeft} attempt(s) remaining.");
+            }
+
+            await ApplyProfileDraftAsync(user, dto.Name, normalizedEmail);
+            user.IsPhoneNumberVerified = true;
+            user.PhoneOtpHash = null;
+            user.PhoneOtpExpiresUtc = null;
+            user.PhoneOtpFailedAttempts = 0;
+            user.PhoneOtpLockedUntilUtc = null;
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return await GenerateAuthResponseAsync(user);
+        }
+
+        public async Task SendEmailVerificationAsync(Guid userId, SendEmailVerificationRequestDto dto)
+        {
+            var normalizedEmail = dto.Email.ToLower().Trim();
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+                throw new ArgumentException("User not found.");
+
+            var emailOwner = await _userRepo.Query()
+                .FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.UserId != userId);
+
+            if (emailOwner != null)
+                throw new ArgumentException("Email already exists");
+
+            user.Email = normalizedEmail;
+            user.IsEmailVerified = false;
+
+            var token = CreateUrlSafeToken();
+            user.EmailVerificationTokenHash = ComputeSha256Hash(token);
+            user.EmailVerificationTokenExpiresUtc = DateTime.UtcNow.AddHours(24);
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var verifyUrl = BuildEmailVerificationUrl(normalizedEmail, token);
+            var htmlBody = BuildEmailVerificationHtml(user.Name, verifyUrl);
+
+            await _emailSender.SendAsync(normalizedEmail, "Verify your Urbaniq email address", htmlBody);
+            _logger.LogInformation("[Auth] Email verification link sent to {Email}", normalizedEmail);
+        }
+
+        public async Task VerifyEmailAsync(VerifyEmailRequestDto dto)
+        {
+            var normalizedEmail = dto.Email.ToLower().Trim();
+            var incomingHash = ComputeSha256Hash(dto.Token);
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+
+            if (user == null ||
+                user.EmailVerificationTokenHash == null ||
+                user.EmailVerificationTokenHash != incomingHash ||
+                user.EmailVerificationTokenExpiresUtc < DateTime.UtcNow)
+            {
+                throw new ArgumentException("Invalid or expired email verification link.");
+            }
+
+            user.IsEmailVerified = true;
+            user.EmailVerificationTokenHash = null;
+            user.EmailVerificationTokenExpiresUtc = null;
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         // ─────────────────────────────────────────────────────────────
@@ -208,6 +345,33 @@ namespace Ecommerce.Application.Services.Identity
             }
         }
 
+        public async Task<UserResponseDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto dto)
+        {
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                throw new ArgumentException("User not found");
+
+            user.Name = dto.Name;
+            user.Age = dto.Age;
+
+            var normalizedEmail = NormalizeOptionalEmail(dto.Email);
+            if (normalizedEmail != null && user.Email != normalizedEmail)
+            {
+                // Verify email uniqueness
+                var emailExists = await _userRepo.Query().AnyAsync(u => u.Email == normalizedEmail && u.UserId != userId);
+                if (emailExists)
+                    throw new ArgumentException("Email already in use by another account");
+
+                user.Email = normalizedEmail;
+                user.IsEmailVerified = false;
+            }
+
+            _userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<UserResponseDto>(user);
+        }
+
         // ─────────────────────────────────────────────────────────────
         // Private helpers
         // ─────────────────────────────────────────────────────────────
@@ -303,6 +467,135 @@ namespace Ecommerce.Application.Services.Identity
                 expires: DateTime.UtcNow.AddMinutes(30)
             );
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private async Task<User> ResolvePhoneUserAsync(string phoneNumber, string? normalizedEmail)
+        {
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+            if (user != null)
+                return user;
+
+            if (!string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                var emailUser = await _userRepo.Query().FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+                if (emailUser != null)
+                {
+                    if (emailUser.PhoneNumber != null && emailUser.PhoneNumber != phoneNumber)
+                        throw new ArgumentException("Email already exists");
+
+                    emailUser.PhoneNumber = phoneNumber;
+                    return emailUser;
+                }
+            }
+
+            var newUser = new User
+            {
+                UserId = Guid.NewGuid(),
+                Name = "Urbaniq Customer",
+                Email = CreatePhonePlaceholderEmail(phoneNumber),
+                PhoneNumber = phoneNumber,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(CreateUrlSafeToken()),
+                Role = UserRole.User,
+                IsBlocked = false,
+                IsEmailVerified = false,
+                IsPhoneNumberVerified = false
+            };
+
+            await _userRepo.AddAsync(newUser);
+            await _unitOfWork.SaveChangesAsync();
+            return newUser;
+        }
+
+        private async Task ApplyProfileDraftAsync(User user, string? name, string? normalizedEmail)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                user.Name = name.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedEmail))
+                return;
+
+            var emailOwner = await _userRepo.Query()
+                .FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.UserId != user.UserId);
+
+            if (emailOwner != null)
+                throw new ArgumentException("Email already exists");
+
+            if (user.Email != normalizedEmail)
+            {
+                user.Email = normalizedEmail;
+                user.IsEmailVerified = false;
+            }
+        }
+
+        private string BuildEmailVerificationUrl(string email, string token)
+        {
+            var frontendUrl = string.IsNullOrWhiteSpace(_emailSettings.FrontendUrl)
+                ? "http://localhost:5173"
+                : _emailSettings.FrontendUrl.TrimEnd('/');
+
+            return $"{frontendUrl}/verify-email?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+        }
+
+        private static string BuildEmailVerificationHtml(string userName, string verifyUrl)
+        {
+            return $@"
+            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;'>
+                <h1 style='margin: 0 0 16px; color: #111827;'>Verify your Urbaniq email</h1>
+                <p style='color: #374151; font-size: 16px; line-height: 1.6;'>Hi <strong>{userName}</strong>,</p>
+                <p style='color: #374151; font-size: 16px; line-height: 1.6;'>
+                    Click the secure authentication link below to verify your email address.
+                    This link expires in 24 hours.
+                </p>
+                <p style='margin: 28px 0;'>
+                    <a href='{verifyUrl}' style='background: #000000; color: #d4a72c; padding: 14px 28px; text-decoration: none; font-weight: 700; display: inline-block;'>
+                        Verify Email Address
+                    </a>
+                </p>
+                <p style='color: #6b7280; font-size: 13px;'>If you did not request this, you can ignore this email.</p>
+            </div>";
+        }
+
+        /// <summary>
+        /// Normalizes a phone number to E.164 format (+91XXXXXXXXXX).
+        /// Accepts raw 10-digit input or numbers already prefixed with country code.
+        /// </summary>
+        private static string NormalizePhoneNumber(string phoneNumber)
+        {
+            var digitsOnly = new string(phoneNumber.Where(char.IsDigit).ToArray());
+
+            // If already includes country code (e.g., 917561867594), ensure + prefix
+            if (digitsOnly.Length == 12 && digitsOnly.StartsWith("91"))
+                return $"+{digitsOnly}";
+
+            // Standard 10-digit Indian mobile number — prepend +91
+            if (digitsOnly.Length == 10)
+                return $"+91{digitsOnly}";
+
+            // Fallback: return with + prefix for any other international format
+            return $"+{digitsOnly}";
+        }
+
+        private static string? NormalizeOptionalEmail(string? email)
+        {
+            return string.IsNullOrWhiteSpace(email) ? null : email.ToLower().Trim();
+        }
+
+        private static string CreatePhonePlaceholderEmail(string phoneNumber)
+        {
+            return $"{phoneNumber}@mobile.urbaniq.local";
+        }
+
+        private static string CreateUrlSafeToken()
+        {
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        private static string MaskPhoneNumber(string phoneNumber)
+        {
+            return phoneNumber.Length <= 4 ? "****" : phoneNumber[^4..];
         }
 
         private async Task<string> CreateRefreshTokenAsync(Guid userId, Guid tokenFamily)

@@ -3,6 +3,7 @@ using Ecommerce.Application.Interfaces.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
+using System.Security.Claims;
 
 namespace Ecommerce.Api.Controllers.Identity
 {
@@ -30,6 +31,55 @@ namespace Ecommerce.Api.Controllers.Identity
             if (dto == null) return BadRequest(new { message = "Invalid login data." });
             var auth = await _authService.LoginAsync(dto);
             return Ok(auth);
+        }
+
+        [HttpPost("phone-otp/request")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RequestPhoneOtp([FromBody] RequestPhoneOtpRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Mobile number is required." });
+            await _authService.RequestPhoneOtpAsync(dto);
+            return Ok(new { message = "OTP has been sent to your mobile number." });
+        }
+
+        [HttpPost("phone-otp/verify")]
+        [AllowAnonymous]
+        public async Task<IActionResult> VerifyPhoneOtp([FromBody] VerifyPhoneOtpRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Invalid OTP data." });
+            var auth = await _authService.VerifyPhoneOtpAsync(dto);
+            return Ok(auth);
+        }
+
+        [HttpPost("email-verification/send")]
+        [Authorize]
+        public async Task<IActionResult> SendEmailVerification([FromBody] SendEmailVerificationRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Email is required." });
+            
+            try
+            {
+                var userId = GetCurrentUserId();
+                await _authService.SendEmailVerificationAsync(userId, dto);
+                return Ok(new { message = "Verification link has been sent to your email." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return BadRequest(new { message = "Failed to send verification email. Please check that your email address is correct and try again." });
+            }
+        }
+
+        [HttpPost("email-verification/verify")]
+        [AllowAnonymous]
+        public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Invalid email verification data." });
+            await _authService.VerifyEmailAsync(dto);
+            return Ok(new { message = "Email address verified successfully." });
         }
 
         [HttpPost("refresh-token")]
@@ -96,6 +146,33 @@ namespace Ecommerce.Api.Controllers.Identity
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpPut("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequestDto dto)
+        {
+            if (dto == null) return BadRequest(new { message = "Invalid profile data." });
+            
+            try
+            {
+                var userId = GetCurrentUserId();
+                var user = await _authService.UpdateProfileAsync(userId, dto);
+                return Ok(new { message = "Profile updated successfully.", data = user });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdValue, out var userId))
+                throw new UnauthorizedAccessException("User id not found in token");
+
+            return userId;
         }
     }
 }

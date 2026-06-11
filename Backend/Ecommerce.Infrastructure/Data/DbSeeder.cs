@@ -64,6 +64,7 @@ namespace Ecommerce.Infrastructure.Data
                 existingAdmin.PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
                 existingAdmin.Role = UserRole.Admin;
                 existingAdmin.IsBlocked = false;
+                existingAdmin.IsEmailVerified = true;
 
                 await context.SaveChangesAsync();
                 logger.LogInformation("Admin user refreshed successfully with email: {Email}", adminEmail);
@@ -77,7 +78,8 @@ namespace Ecommerce.Infrastructure.Data
                 Email = adminEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 Role = UserRole.Admin,
-                IsBlocked = false
+                IsBlocked = false,
+                IsEmailVerified = true
             };
 
             context.Users.Add(admin);

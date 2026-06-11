@@ -7,7 +7,7 @@ const AdminRoute = () => {
   const user = useSelector(selectCurrentUser);
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin-login" replace />;
   }
 
   // Ensure only Admins can access

@@ -10,8 +10,13 @@ namespace Ecommerce.Application.Interfaces.Identity
     {
         Task<UserResponseDto> RegisterAsync(RegisterRequestDto registerDto, string role = "User");
         Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto);
+        Task RequestPhoneOtpAsync(RequestPhoneOtpRequestDto dto);
+        Task<AuthResponseDto> VerifyPhoneOtpAsync(VerifyPhoneOtpRequestDto dto);
+        Task SendEmailVerificationAsync(Guid userId, SendEmailVerificationRequestDto dto);
+        Task VerifyEmailAsync(VerifyEmailRequestDto dto);
         Task<AuthResponseDto> RefreshTokenAsync(string refreshToken);
         Task RevokeRefreshTokenAsync(string refreshToken);
+
 
         /// <summary>Generates a 6-digit verification code, stores its hash, and emails it to the user.</summary>
         Task ForgotPasswordAsync(ForgotPasswordRequestDto dto);
@@ -21,5 +26,8 @@ namespace Ecommerce.Application.Interfaces.Identity
 
         /// <summary>Validates the 6-digit code and updates the user's password.</summary>
         Task ResetPasswordAsync(ResetPasswordRequestDto dto);
+
+        /// <summary>Updates the user's profile information. Returns updated user.</summary>
+        Task<UserResponseDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto dto);
     }
 }

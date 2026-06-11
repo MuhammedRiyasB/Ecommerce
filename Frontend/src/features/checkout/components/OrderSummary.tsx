@@ -1,7 +1,9 @@
-import React from 'react';
-import { ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import type { CartResponse } from '@/features/cart/cartApiSlice';
 import type { Address } from '../addressApiSlice';
+import { useRemoveFromCartMutation } from '@/features/cart/cartApiSlice';
+import { toast } from 'react-toastify';
 
 interface OrderSummaryProps {
   cart: CartResponse;
@@ -11,8 +13,25 @@ interface OrderSummaryProps {
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ cart, address, onBack, onContinue }) => {
+  const [removeFromCart] = useRemoveFromCartMutation();
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const totalMRP = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const totalDiscount = cart.items.reduce((sum, item) => sum + item.discount * item.quantity, 0);
+
+  const handleDeleteItem = async (cartItemId: string) => {
+    const confirmed = window.confirm('Remove this item from your cart?');
+    if (!confirmed) return;
+
+    setDeletingItemId(cartItemId);
+    try {
+      await removeFromCart(cartItemId).unwrap();
+      toast.success('Item removed from order summary');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to remove item');
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -44,10 +63,29 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ cart, address, onBack, onCo
                 className="h-20 w-16 shrink-0 bg-gray-50 object-cover"
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-gray-900">{item.productName}</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Size: {item.size} | Color: {item.color} | Qty: {item.quantity}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-gray-900">{item.productName}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Size: {item.size} | Color: {item.color} | Qty: {item.quantity}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteItem(item.cartItemId)}
+                    disabled={deletingItemId === item.cartItemId}
+                    className="inline-flex items-center gap-1 rounded-sm border border-red-200 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Delete item"
+                    aria-label={`Delete ${item.productName}`}
+                  >
+                    {deletingItemId === item.cartItemId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                    Remove
+                  </button>
+                </div>
                 {item.deliveryPincode && (
                   <p className="mt-1 text-xs font-medium text-gray-500">Selected pincode: {item.deliveryPincode}</p>
                 )}

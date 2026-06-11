@@ -16,6 +16,34 @@ export const authApiSlice = apiSlice.injectEndpoints({
         body: { ...userData },
       }),
     }),
+    requestPhoneOtp: builder.mutation({
+      query: (data: { phoneNumber: string; name?: string; email?: string }) => ({
+        url: '/Auth/phone-otp/request',
+        method: 'POST',
+        body: { ...data },
+      }),
+    }),
+    verifyPhoneOtp: builder.mutation({
+      query: (data: { phoneNumber: string; code: string; name?: string; email?: string }) => ({
+        url: '/Auth/phone-otp/verify',
+        method: 'POST',
+        body: { ...data },
+      }),
+    }),
+    sendEmailVerification: builder.mutation({
+      query: (data: { email: string }) => ({
+        url: '/Auth/email-verification/send',
+        method: 'POST',
+        body: { ...data },
+      }),
+    }),
+    verifyEmail: builder.mutation({
+      query: (data: { email: string; token: string }) => ({
+        url: '/Auth/email-verification/verify',
+        method: 'POST',
+        body: { ...data },
+      }),
+    }),
     forgotPassword: builder.mutation({
       query: (data: { email: string }) => ({
         url: '/Auth/forgot-password',
@@ -37,14 +65,25 @@ export const authApiSlice = apiSlice.injectEndpoints({
         body: { ...data },
       }),
     }),
+    updateProfile: builder.mutation({
+      query: (data: { name: string; age?: number; email: string }) => ({
+        url: '/Auth/profile',
+        method: 'PUT',
+        body: { ...data },
+      }),
+    }),
   }),
 });
 
 export const {
   useLoginMutation,
   useRegisterMutation,
+  useRequestPhoneOtpMutation,
+  useVerifyPhoneOtpMutation,
+  useSendEmailVerificationMutation,
+  useVerifyEmailMutation,
   useForgotPasswordMutation,
   useVerifyOtpMutation,
   useResetPasswordMutation,
+  useUpdateProfileMutation,
 } = authApiSlice;
-

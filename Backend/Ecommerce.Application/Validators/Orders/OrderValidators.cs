@@ -11,6 +11,10 @@ namespace Ecommerce.Application.Validators.Orders
             RuleFor(x => x.AddressId).NotEmpty().WithMessage("AddressId is required");
             RuleFor(x => x.TransactionId).NotEmpty().MaximumLength(100)
                 .WithMessage("TransactionId is required and must be under 100 characters");
+            RuleFor(x => x.PaymentMethod)
+                .NotEmpty().WithMessage("Payment method is required")
+                .Must(method => method == "card" || method == "cod")
+                .WithMessage("Payment method must be either card or cod");
         }
     }
 

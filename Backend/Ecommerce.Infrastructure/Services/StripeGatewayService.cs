@@ -1,4 +1,5 @@
 using Ecommerce.Application.Interfaces.Payment;
+using Ecommerce.Application.DTOs.Payment;
 using Ecommerce.Domain.Common;
 using Microsoft.Extensions.Configuration;
 using Stripe;
@@ -18,13 +19,16 @@ namespace Ecommerce.Infrastructure.Services
         {
             var secretKey = configuration["StripeSettings:SecretKey"];
             
-            if (string.IsNullOrEmpty(secretKey))
-                throw new InvalidOperationException("Stripe configuration is missing.");
+            if (string.IsNullOrWhiteSpace(secretKey) ||
+                !secretKey.StartsWith("sk_", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Stripe secret key is missing or invalid.");
+            }
 
             StripeConfiguration.ApiKey = secretKey;
         }
 
-        public async Task<ApiResponse<string>> CreatePaymentIntentAsync(decimal amount)
+        public async Task<ApiResponse<PaymentIntentResponseDto>> CreatePaymentIntentAsync(decimal amount)
         {
             try
             {
@@ -44,16 +48,20 @@ namespace Ecommerce.Infrastructure.Services
                 var service = new PaymentIntentService();
                 PaymentIntent intent = await service.CreateAsync(options);
 
-                return new ApiResponse<string>
+                return new ApiResponse<PaymentIntentResponseDto>
                 {
                     StatusCode = 200,
                     Message = "Payment Intent created",
-                    Data = intent.ClientSecret
+                    Data = new PaymentIntentResponseDto
+                    {
+                        ClientSecret = intent.ClientSecret,
+                        PaymentIntentId = intent.Id
+                    }
                 };
             }
             catch (StripeException ex)
             {
-                return new ApiResponse<string>
+                return new ApiResponse<PaymentIntentResponseDto>
                 {
                     StatusCode = 500,
                     Message = $"Stripe error: {ex.StripeError.Message}"
@@ -61,7 +69,7 @@ namespace Ecommerce.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                return new ApiResponse<string>
+                return new ApiResponse<PaymentIntentResponseDto>
                 {
                     StatusCode = 500,
                     Message = $"Failed to create Stripe payment intent: {ex.Message}"
@@ -69,29 +77,48 @@ namespace Ecommerce.Infrastructure.Services
             }
         }
 
-        public async Task<ApiResponse<bool>> VerifyPaymentAsync(string paymentIntentId)
+        public async Task<ApiResponse<PaymentVerificationResponseDto>> VerifyPaymentAsync(string paymentIntentId)
         {
             try
             {
                 var service = new PaymentIntentService();
                 PaymentIntent intent = await service.GetAsync(paymentIntentId);
+                var isSuccessful = intent.Status == "succeeded";
 
-                if (intent.Status == "succeeded")
+                if (isSuccessful)
                 {
-                    return new ApiResponse<bool> { StatusCode = 200, Message = "Payment verified successfully", Data = true };
+                    return new ApiResponse<PaymentVerificationResponseDto>
+                    {
+                        StatusCode = 200,
+                        Message = "Payment verified successfully",
+                        Data = new PaymentVerificationResponseDto
+                        {
+                            Status = intent.Status,
+                            IsSuccessful = true
+                        }
+                    };
                 }
                 else
                 {
-                    return new ApiResponse<bool> { StatusCode = 400, Message = $"Payment verification failed. Status: {intent.Status}", Data = false };
+                    return new ApiResponse<PaymentVerificationResponseDto>
+                    {
+                        StatusCode = 400,
+                        Message = $"Payment verification failed. Status: {intent.Status}",
+                        Data = new PaymentVerificationResponseDto
+                        {
+                            Status = intent.Status,
+                            IsSuccessful = false
+                        }
+                    };
                 }
             }
             catch (StripeException ex)
             {
-                return new ApiResponse<bool> { StatusCode = 500, Message = $"Stripe error: {ex.StripeError.Message}", Data = false };
+                return new ApiResponse<PaymentVerificationResponseDto> { StatusCode = 500, Message = $"Stripe error: {ex.StripeError.Message}" };
             }
             catch (Exception ex)
             {
-                return new ApiResponse<bool> { StatusCode = 500, Message = $"Verification error: {ex.Message}", Data = false };
+                return new ApiResponse<PaymentVerificationResponseDto> { StatusCode = 500, Message = $"Verification error: {ex.Message}" };
             }
         }
     }

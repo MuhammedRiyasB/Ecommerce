@@ -209,7 +209,7 @@ const ProductDetailPage: React.FC = () => {
     }
 
     if (!token) {
-      navigate('/login', { state: { redirectTo: '/checkout', from: location.pathname } });
+      navigate(`${location.pathname}?auth=login&redirectTo=%2Fcheckout`);
       return;
     }
 

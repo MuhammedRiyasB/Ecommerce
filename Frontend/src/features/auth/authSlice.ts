@@ -3,9 +3,13 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 export interface User {
   userId: string;
   email: string;
+  phoneNumber?: string;
   name: string;
+  age?: number;
   role: string;
   isBlocked?: boolean;
+  isPhoneNumberVerified?: boolean;
+  isEmailVerified?: boolean;
 }
 
 interface AuthState {

@@ -25,7 +25,7 @@ const AccountPage: React.FC = () => {
 
   const handleLogout = () => {
     dispatch(logout());
-    navigate('/login');
+    navigate('/');
   };
 
   const referralCode = user?.name ? `URB-${user.name.replace(/\s+/g, '').slice(0, 6).toUpperCase()}10` : 'URB-FRIEND10';
@@ -36,11 +36,12 @@ const AccountPage: React.FC = () => {
         <div className="mb-8 border border-gray-100 bg-white p-6">
           <p className="text-xs font-black uppercase tracking-widest text-teal-600">My Account</p>
           <h1 className="mt-2 text-2xl font-black text-gray-900">{user?.name || 'Customer'}</h1>
-          <p className="mt-1 text-sm text-gray-500">{user?.email}</p>
+          {user?.phoneNumber && <p className="mt-1 text-sm text-gray-500">{user.phoneNumber}</p>}
+          {user?.isEmailVerified && <p className="mt-1 text-sm text-gray-500">{user.email}</p>}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Link to="/account" className="border border-gray-100 bg-white p-5 hover:border-teal-200">
+          <Link to="/profile" className="border border-gray-100 bg-white p-5 hover:border-teal-200">
             <User className="mb-4 h-5 w-5 text-teal-600" />
             <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">My Profile</h2>
             <p className="mt-2 text-sm text-gray-500">Profile details are linked to your login account.</p>

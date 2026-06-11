@@ -16,8 +16,7 @@ type AuthModalProps = {
   redirectTo?: string;
 };
 
-const isPlaceholderEmail = (email?: string) =>
-  !email || email.endsWith('@mobile.urbaniq.local');
+
 
 const getApiError = (error: unknown, fallback: string) => {
   const apiError = error as { data?: { message?: string; title?: string } };

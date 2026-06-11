@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { Mail, X } from 'lucide-react';
 import { selectCurrentUser, selectIsAuthenticated } from './authSlice';
 import { useSendEmailVerificationMutation } from './authApiSlice';

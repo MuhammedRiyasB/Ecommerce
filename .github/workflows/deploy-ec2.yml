@@ -91,7 +91,17 @@ jobs:
             # Clean up old standalone container to free up port 80
             sudo docker stop ecommerce-api || true
             sudo docker rm ecommerce-api || true
-            
+
+            # --- Free up disk space before pulling new images ---
+            # Remove stopped containers, dangling images, unused networks and build cache.
+            # This prevents "no space left on device" errors during docker pull.
+            echo "=== Disk usage BEFORE cleanup ==="
+            df -h /
+            sudo docker system prune -f --volumes || true
+            sudo docker image prune -af || true
+            echo "=== Disk usage AFTER cleanup ==="
+            df -h /
+
             # Pull the latest images and start containers
             if sudo docker compose version &> /dev/null; then
               sudo docker compose pull

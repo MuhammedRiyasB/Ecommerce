@@ -213,7 +213,9 @@ namespace Ecommerce.Application.Services.Catalog
             decimal? minPrice = null,
             decimal? maxPrice = null,
             string? color = null,
-            string? size = null)
+            string? size = null,
+            string? categorySlug = null,
+            bool? isSale = null)
         {
             var query = _productRepo.Query()
                 .AsNoTracking()
@@ -223,7 +225,7 @@ namespace Ecommerce.Application.Services.Catalog
                 .Include(p => p.Variants)
                 .AsQueryable();
 
-            query = ApplyFilters(query, categoryId, search, minPrice, maxPrice, color, size);
+            query = ApplyFilters(query, categoryId, search, minPrice, maxPrice, color, size, categorySlug, isSale);
 
             var totalCount = await query.CountAsync();
             var products = await query
@@ -360,11 +362,24 @@ namespace Ecommerce.Application.Services.Catalog
             decimal? minPrice,
             decimal? maxPrice,
             string? color,
-            string? size)
+            string? size,
+            string? categorySlug,
+            bool? isSale)
         {
             if (categoryId.HasValue)
             {
                 query = query.Where(p => p.CategoryId == categoryId.Value || p.SubCategoryId == categoryId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(categorySlug))
+            {
+                var slugLower = categorySlug.ToLower();
+                query = query.Where(p => p.Category.Slug.ToLower() == slugLower || (p.SubCategory != null && p.SubCategory.Slug.ToLower() == slugLower));
+            }
+
+            if (isSale == true)
+            {
+                query = query.Where(p => p.Discount > 0);
             }
 
             if (!string.IsNullOrWhiteSpace(search))

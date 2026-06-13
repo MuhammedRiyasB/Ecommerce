@@ -38,7 +38,9 @@ namespace Ecommerce.Application.Interfaces.Catalog
             decimal? minPrice = null,
             decimal? maxPrice = null,
             string? color = null,
-            string? size = null);
+            string? size = null,
+            string? categorySlug = null,
+            bool? isSale = null);
 
         /// <summary>
         /// Returns a single product by its unique ID.

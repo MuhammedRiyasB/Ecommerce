@@ -9,10 +9,10 @@ import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 import { useGetMeQuery } from '../features/auth/authApiSlice';
 
 const navItems = [
-  { label: 'New Arrivals', href: '/catalog' },
-  { label: 'Formals', href: '/catalog' },
-  { label: 'Occasionwear', href: '/catalog' },
-  { label: 'Sale', href: '/catalog' },
+  { label: 'New Arrivals', href: '/catalog?newArrivals=true' },
+  { label: 'Formals', href: '/catalog?categorySlug=formals' },
+  { label: 'Occasionwear', href: '/catalog?categorySlug=occasionwear' },
+  { label: 'Sale', href: '/catalog?isSale=true' },
 ];
 
 export default function MainLayout() {

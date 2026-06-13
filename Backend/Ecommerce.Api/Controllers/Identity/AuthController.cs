@@ -166,6 +166,22 @@ namespace Ecommerce.Api.Controllers.Identity
             }
         }
 
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var user = await _authService.GetCurrentUserAsync(userId);
+                return Ok(new { data = user });
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
         private Guid GetCurrentUserId()
         {
             var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -6,6 +6,8 @@ import { selectCurrentUser, selectIsAuthenticated } from '../features/auth/authS
 import AuthModal from '../features/auth/AuthModal';
 import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 
+import { useGetMeQuery } from '../features/auth/authApiSlice';
+
 const navItems = [
   { label: 'New Arrivals', href: '/catalog' },
   { label: 'Formals', href: '/catalog' },
@@ -16,6 +18,10 @@ const navItems = [
 export default function MainLayout() {
   const cartCount = useSelector(selectCartCount);
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  
+  // Automatically track and update user profile on focus/reconnect
+  useGetMeQuery(undefined, { skip: !isAuthenticated });
+
   const user = useSelector(selectCurrentUser);
   const location = useLocation();
   const navigate = useNavigate();

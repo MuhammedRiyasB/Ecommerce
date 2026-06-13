@@ -372,6 +372,15 @@ namespace Ecommerce.Application.Services.Identity
             return _mapper.Map<UserResponseDto>(user);
         }
 
+        public async Task<UserResponseDto> GetCurrentUserAsync(Guid userId)
+        {
+            var user = await _userRepo.Query().FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null)
+                throw new ArgumentException("User not found");
+
+            return _mapper.Map<UserResponseDto>(user);
+        }
+
         // ─────────────────────────────────────────────────────────────
         // Private helpers
         // ─────────────────────────────────────────────────────────────

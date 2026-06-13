@@ -37,7 +37,12 @@ const AccountPage: React.FC = () => {
           <p className="text-xs font-black uppercase tracking-widest text-teal-600">My Account</p>
           <h1 className="mt-2 text-2xl font-black text-gray-900">{user?.name || 'Customer'}</h1>
           {user?.phoneNumber && <p className="mt-1 text-sm text-gray-500">{user.phoneNumber}</p>}
-          {user?.isEmailVerified && <p className="mt-1 text-sm text-gray-500">{user.email}</p>}
+          {user?.isEmailVerified && user?.email && (
+            <p className="mt-1 flex items-center text-sm font-medium text-emerald-600">
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+              {user.email} (Verified)
+            </p>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">

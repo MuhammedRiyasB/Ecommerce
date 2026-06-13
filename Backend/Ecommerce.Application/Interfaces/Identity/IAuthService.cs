@@ -29,5 +29,8 @@ namespace Ecommerce.Application.Interfaces.Identity
 
         /// <summary>Updates the user's profile information. Returns updated user.</summary>
         Task<UserResponseDto> UpdateProfileAsync(Guid userId, UpdateProfileRequestDto dto);
+
+        /// <summary>Gets the current user's profile.</summary>
+        Task<UserResponseDto> GetCurrentUserAsync(Guid userId);
     }
 }

@@ -70,6 +70,8 @@ export interface ProductParams {
   maxPrice?: number;
   color?: string;
   size?: string;
+  categorySlug?: string;
+  isSale?: boolean;
 }
 
 export const catalogApiSlice = apiSlice.injectEndpoints({

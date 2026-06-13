@@ -55,10 +55,12 @@ namespace Ecommerce.Api.Controllers.Catalog
             [FromQuery] decimal? minPrice = null,
             [FromQuery] decimal? maxPrice = null,
             [FromQuery] string? color = null,
-            [FromQuery] string? size = null)
+            [FromQuery] string? size = null,
+            [FromQuery] string? categorySlug = null,
+            [FromQuery] bool? isSale = null)
         {
             return Ok(await _productService.GetAllProductsAsync(
-                pageNumber, pageSize, categoryId, search, minPrice, maxPrice, color, size));
+                pageNumber, pageSize, categoryId, search, minPrice, maxPrice, color, size, categorySlug, isSale));
         }
 
         /// <summary>

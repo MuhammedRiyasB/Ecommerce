@@ -27,10 +27,34 @@ const ProductListPage: React.FC = () => {
   const size = searchParams.get('size') || undefined;
   const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined;
   const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined;
+  const categorySlug = searchParams.get('categorySlug') || undefined;
+  const isSale = searchParams.get('isSale') === 'true' ? true : undefined;
+  const newArrivals = searchParams.get('newArrivals') === 'true';
 
   const { data: categories } = useGetCategoriesQuery();
   const allCategories = useMemo(() => flattenCategories(categories || []), [categories]);
-  const activeCategory = allCategories.find((category) => category.categoryId === categoryId);
+  const activeCategory = categorySlug
+    ? allCategories.find((c) => c.slug?.toLowerCase() === categorySlug.toLowerCase())
+    : allCategories.find((c) => c.categoryId === categoryId);
+
+  // Compute dynamic page title based on navigation context
+  const pageTitle = useMemo(() => {
+    if (isSale) return 'Sale';
+    if (newArrivals) return 'New Arrivals';
+    if (activeCategory) return activeCategory.categoryName;
+    if (categorySlug) return categorySlug.charAt(0).toUpperCase() + categorySlug.slice(1);
+    if (search) return 'Search Results';
+    return 'All Products';
+  }, [isSale, newArrivals, activeCategory, categorySlug, search]);
+
+  // Compute page subtitle
+  const pageSubtitle = useMemo(() => {
+    if (isSale) return 'Exclusive markdowns on premium menswear. Grab your favourites before they sell out.';
+    if (newArrivals) return 'The latest additions to our menswear collection, freshly curated for the modern gentleman.';
+    if (categorySlug === 'formals') return 'Elevate your wardrobe with our refined formal collection — tailored shirts, trousers, and blazers.';
+    if (categorySlug === 'occasionwear') return 'Dress for every occasion — weddings, parties, and celebrations with impeccable style.';
+    return 'Browse tailored formalwear, modern casuals, premium fabric stories, and occasion pieces with refined filters built for fast discovery.';
+  }, [isSale, newArrivals, categorySlug]);
 
   const { data: productData, isLoading, isError } = useGetProductsQuery({
     pageNumber,
@@ -40,6 +64,8 @@ const ProductListPage: React.FC = () => {
     minPrice,
     maxPrice,
     size,
+    categorySlug,
+    isSale,
   });
 
   const updateParam = (key: string, value?: string) => {
@@ -158,10 +184,10 @@ const ProductListPage: React.FC = () => {
               {search ? `Search: ${search}` : 'Menswear Collection'}
             </p>
             <h1 className="mt-3 text-4xl font-black uppercase tracking-[0.08em] sm:text-5xl">
-              {activeCategory?.categoryName || 'All Products'}
+              {pageTitle}
             </h1>
             <p className="mt-4 text-sm leading-6 text-[#d8d2c8]">
-              Browse tailored formalwear, modern casuals, premium fabric stories, and occasion pieces with refined filters built for fast discovery.
+              {pageSubtitle}
             </p>
           </div>
         </div>

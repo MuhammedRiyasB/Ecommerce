@@ -19,6 +19,12 @@ services:
       - SmsSettings__AccountSid=${TWILIO_ACCOUNT_SID}
       - SmsSettings__AuthToken=${TWILIO_AUTH_TOKEN}
       - SmsSettings__FromNumber=${TWILIO_FROM_NUMBER}
+      - EmailSettings__Host=${SMTP_HOST}
+      - EmailSettings__Port=${SMTP_PORT}
+      - EmailSettings__Username=${SMTP_USERNAME}
+      - EmailSettings__Password=${SMTP_PASSWORD}
+      - EmailSettings__FromAddress=${SMTP_FROM_ADDRESS}
+      - EmailSettings__FrontendUrl=${FRONTEND_URL}
 
   nginx:
     image: nginx:alpine

@@ -1,6 +1,5 @@
 import { apiSlice } from '@/app/apiSlice';
-
-export const authApiSlice = apiSlice.injectEndpoints({
+import { setCredentials } from './authSlice';export const authApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation({
       query: (credentials) => ({
@@ -72,6 +71,22 @@ export const authApiSlice = apiSlice.injectEndpoints({
         body: { ...data },
       }),
     }),
+    getMe: builder.query({
+      query: () => '/Auth/me',
+      providesTags: ['User'],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          const authRaw = localStorage.getItem('ecommerce.auth');
+          const token = authRaw ? JSON.parse(authRaw).token : null;
+          if (token && data?.data) {
+            dispatch(setCredentials({ user: data.data, accessToken: token }));
+          }
+        } catch (err) {
+          // Ignore
+        }
+      },
+    }),
   }),
 });
 
@@ -86,4 +101,5 @@ export const {
   useVerifyOtpMutation,
   useResetPasswordMutation,
   useUpdateProfileMutation,
+  useGetMeQuery,
 } = authApiSlice;

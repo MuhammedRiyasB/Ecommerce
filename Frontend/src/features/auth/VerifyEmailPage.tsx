@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, Loader2, X } from 'lucide-react';
-import { useVerifyEmailMutation } from './authApiSlice';
+import { useDispatch } from 'react-redux';
+import { useVerifyEmailMutation, authApiSlice } from './authApiSlice';
 
 const getApiError = (error: unknown, fallback: string) => {
   const apiError = error as { data?: { message?: string; title?: string } };
@@ -10,6 +11,7 @@ const getApiError = (error: unknown, fallback: string) => {
 
 const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const dispatch = useDispatch();
   const [verifyEmail] = useVerifyEmailMutation();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email address...');
@@ -29,6 +31,8 @@ const VerifyEmailPage: React.FC = () => {
         await verifyEmail({ email, token }).unwrap();
         setStatus('success');
         setMessage('Your email address has been verified successfully.');
+        // Tell RTK Query to refetch any active queries that provide 'User' (e.g. getMe)
+        dispatch(authApiSlice.util.invalidateTags(['User']));
       } catch (error) {
         setStatus('error');
         setMessage(getApiError(error, 'This email verification link is invalid or expired.'));

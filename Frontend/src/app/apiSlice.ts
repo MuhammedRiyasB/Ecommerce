@@ -17,5 +17,7 @@ export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery,
   tagTypes: ['Product', 'Order', 'Category', 'Cart', 'User', 'Address', 'Wishlist'],
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   endpoints: () => ({}),
 });

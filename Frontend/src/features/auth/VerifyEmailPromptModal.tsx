@@ -15,6 +15,12 @@ const VerifyEmailPromptModal: React.FC = () => {
   const [sendEmailVerification, { isLoading: isSendingEmail }] = useSendEmailVerificationMutation();
 
   useEffect(() => {
+    // If the email is verified (e.g. from background auto-tracking), close the modal immediately
+    if (user?.isEmailVerified) {
+      setIsOpen(false);
+      return;
+    }
+
     // Only show if logged in, email not verified, and we haven't dismissed it this session
     if (isAuthenticated && user && !user.isEmailVerified) {
       const dismissed = sessionStorage.getItem(`verify_prompt_dismissed_${user.userId}`);

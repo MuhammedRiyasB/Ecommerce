@@ -57,9 +57,10 @@ const AdminLayout = () => {
         }`}
       >
         <div className="flex h-24 items-center justify-between border-b border-[#263044] px-6">
-          <Link to="/" className="leading-none">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.45em] text-[#d7b46a]">Urbaniq</span>
-            <span className="mt-1 block text-2xl font-black uppercase tracking-[0.14em]">Admin</span>
+          <Link to="/admin" className="shrink-0 leading-none">
+            <div className="bg-white rounded-md p-1">
+              <img src="/logo.jpeg" alt="Urbaniq" className="h-12 w-auto object-contain" />
+            </div>
           </Link>
           <button type="button" onClick={() => setSidebarOpen(false)} className="lg:hidden" aria-label="Close menu">
             <X className="h-5 w-5" />

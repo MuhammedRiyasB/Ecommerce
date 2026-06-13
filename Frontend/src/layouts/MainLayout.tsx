@@ -47,10 +47,9 @@ export default function MainLayout() {
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#111827]">
       <header className="sticky top-0 z-30 border-b border-[#e8e0d0] bg-[#fbfaf7]/95 backdrop-blur-xl">
-        <div className="container mx-auto flex h-20 items-center justify-between gap-5">
+        <div className="container mx-auto flex h-32 items-center justify-between gap-5">
           <Link to="/" className="shrink-0 leading-none">
-            <span className="block text-[10px] font-black uppercase tracking-[0.45em] text-[#9d731e]">Urbaniq</span>
-            <span className="mt-1 block text-2xl font-black uppercase tracking-[0.14em] text-[#111827]">Atelier</span>
+            <img src="/logo.jpeg" alt="Urbaniq" className="h-[120px] w-auto object-contain mix-blend-multiply" />
           </Link>
 
           <nav className="hidden items-center gap-7 lg:flex">

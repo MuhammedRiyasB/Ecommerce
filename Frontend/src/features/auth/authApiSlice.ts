@@ -74,7 +74,7 @@ import { setCredentials } from './authSlice';export const authApiSlice = apiSlic
     getMe: builder.query({
       query: () => '/Auth/me',
       providesTags: ['User'],
-      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
           const authRaw = localStorage.getItem('ecommerce.auth');

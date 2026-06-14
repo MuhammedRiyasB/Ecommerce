@@ -201,14 +201,24 @@ const Home: React.FC = () => {
       <section className="relative overflow-hidden bg-[#111827]">
         <div className="relative min-h-[560px] md:min-h-[680px]">
           {currentSlide && (
-            <img
-              src={currentSlide.image}
-              alt={currentSlide.title}
-              className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500"
-            />
+            <>
+              {/* Blurred background layer to maintain the ambient colors without stretching artifacts */}
+              <img
+                src={currentSlide.image}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full object-cover object-center opacity-40 blur-3xl transition-opacity duration-500"
+              />
+              {/* Crisp foreground image: cover on mobile, contained on the right for desktop */}
+              <img
+                src={currentSlide.image}
+                alt={currentSlide.title}
+                className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-500 md:left-1/3 md:w-2/3 md:object-contain md:object-right lg:left-1/2 lg:w-1/2 lg:pr-12"
+              />
+            </>
           )}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/92 via-[#111827]/70 to-[#111827]/28" />
-          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#111827]/72 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/95 via-[#111827]/80 to-[#111827]/30 md:to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#111827]/90 to-transparent" />
 
           <div className="container relative mx-auto flex min-h-[560px] items-center py-16 md:min-h-[680px]">
             <div className="max-w-2xl text-white">

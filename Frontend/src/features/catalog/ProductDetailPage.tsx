@@ -46,14 +46,24 @@ const ProductDetailPage: React.FC = () => {
     [product?.variants]
   );
   const sizeOptions = useMemo(
-    () =>
-      Array.from(
+    () => {
+      const sizes = Array.from(
         new Set(
           (product?.variants ?? [])
             .filter((variant) => !selectedColor || variant.color === selectedColor)
             .map((variant) => variant.size)
         )
-      ),
+      );
+      const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
+      return sizes.sort((a, b) => {
+        const indexA = sizeOrder.indexOf(a.toUpperCase());
+        const indexB = sizeOrder.indexOf(b.toUpperCase());
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return a.localeCompare(b);
+      });
+    },
     [product?.variants, selectedColor]
   );
   const selectedVariant = useMemo(

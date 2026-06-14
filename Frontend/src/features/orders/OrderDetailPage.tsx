@@ -84,7 +84,7 @@ const OrderDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-dvh bg-gray-50">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         <div className="mb-8 flex items-center gap-4">
           <Link to="/orders" className="rounded-full p-2 transition-colors hover:bg-gray-100">

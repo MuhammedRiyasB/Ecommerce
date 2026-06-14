@@ -123,7 +123,7 @@ const OrdersPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-dvh bg-gray-50">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         <h1 className="mb-2 text-2xl font-black uppercase tracking-tight text-gray-900">My Orders</h1>
         <p className="mb-6 text-sm text-gray-500">

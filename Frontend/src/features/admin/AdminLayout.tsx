@@ -41,7 +41,7 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f1e9] text-[#111827]">
+    <div className="min-h-dvh bg-[#f5f1e9] text-[#111827]">
       {sidebarOpen && (
         <button
           type="button"

@@ -23,6 +23,7 @@ describe('authSlice', () => {
           role: 'User',
         },
         accessToken: 'token-123',
+        refreshToken: 'refresh-123',
       })
     );
 
@@ -41,6 +42,7 @@ describe('authSlice', () => {
           role: 'User',
         },
         accessToken: 'token-123',
+        refreshToken: 'refresh-123',
       })
     );
 

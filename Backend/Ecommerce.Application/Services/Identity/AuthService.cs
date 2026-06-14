@@ -451,7 +451,7 @@ namespace Ecommerce.Application.Services.Identity
             {
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
                 User = _mapper.Map<UserResponseDto>(user)
             };
         }
@@ -473,7 +473,7 @@ namespace Ecommerce.Application.Services.Identity
                 audience: _jwtSettings.Audience,
                 claims: claims,
                 signingCredentials: credentials,
-                expires: DateTime.UtcNow.AddMinutes(30)
+                expires: DateTime.UtcNow.AddMinutes(15)
             );
             return new JwtSecurityTokenHandler().WriteToken(token);
         }

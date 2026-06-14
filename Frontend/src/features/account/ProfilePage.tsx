@@ -47,7 +47,7 @@ const ProfilePage: React.FC = () => {
       if (currentToken) {
         const parsedState = JSON.parse(currentToken);
         if (parsedState.token) {
-          dispatch(setCredentials({ user: updatedUser, accessToken: parsedState.token }));
+          dispatch(setCredentials({ user: updatedUser, accessToken: parsedState.token, refreshToken: parsedState.refreshToken || '' }));
         }
       }
 

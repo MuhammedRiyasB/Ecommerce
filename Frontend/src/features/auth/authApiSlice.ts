@@ -79,8 +79,9 @@ import { setCredentials } from './authSlice';export const authApiSlice = apiSlic
           const { data } = await queryFulfilled;
           const authRaw = localStorage.getItem('ecommerce.auth');
           const token = authRaw ? JSON.parse(authRaw).token : null;
+          const refreshToken = authRaw ? JSON.parse(authRaw).refreshToken : null;
           if (token && data?.data) {
-            dispatch(setCredentials({ user: data.data, accessToken: token }));
+            dispatch(setCredentials({ user: data.data, accessToken: token, refreshToken: refreshToken || '' }));
           }
         } catch (err) {
           // Ignore

@@ -37,8 +37,23 @@ builder.Services.AddAutoMapper(cfg => cfg.AddMaps(typeof(MappingProfile).Assembl
 builder.Services.AddFluentValidationAutoValidation()
     .AddFluentValidationClientsideAdapters();
 
-// ===================== Memory Cache =====================
-builder.Services.AddMemoryCache();
+// ===================== Caching (Redis/Memory) =====================
+builder.Services.AddMemoryCache(); // Keep for internal ASP.NET features
+
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    // Fallback to in-memory IDistributedCache for local dev without Redis
+    builder.Services.AddDistributedMemoryCache();
+}
+else
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "Ecommerce_";
+    });
+}
 
 // ===================== Authentication =====================
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>();

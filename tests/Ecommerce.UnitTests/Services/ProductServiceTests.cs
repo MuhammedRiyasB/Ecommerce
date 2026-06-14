@@ -6,7 +6,7 @@ using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using MockQueryable.Moq;
 using Moq;
 
@@ -24,7 +24,7 @@ public class ProductServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IMapper> _mapperMock;
     private readonly Mock<ICloudImageService> _cloudImageMock;
-    private readonly IMemoryCache _cache;
+    private readonly Mock<IDistributedCache> _cacheMock;
     private readonly ProductService _sut;
 
     public ProductServiceTests()
@@ -35,7 +35,7 @@ public class ProductServiceTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
         _cloudImageMock = new Mock<ICloudImageService>();
-        _cache = new MemoryCache(new MemoryCacheOptions());
+        _cacheMock = new Mock<IDistributedCache>();
 
         _sut = new ProductService(
             _productRepoMock.Object,
@@ -44,7 +44,7 @@ public class ProductServiceTests
             _unitOfWorkMock.Object,
             _mapperMock.Object,
             _cloudImageMock.Object,
-            _cache);
+            _cacheMock.Object);
     }
 
     private static CreateProductRequestDto CreateValidDto() => new()
@@ -177,8 +177,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AddProductAsync_InvalidatesCache()
     {
-        // Arrange — pre-populate the cache
-        _cache.Set("products_cache", new List<ProductResponseDto>());
+        // Arrange
 
         var dto = CreateValidDto();
         var category = CreateCategory();
@@ -196,7 +195,7 @@ public class ProductServiceTests
         await _sut.AddProductAsync(dto, new[] { imageMock.Object });
 
         // Assert — cache must be cleared after adding a product
-        _cache.TryGetValue("products_cache", out _).Should().BeFalse();
+        _cacheMock.Verify(c => c.Remove("products_cache"), Times.Once);
     }
 
     // ==================== UpdateProduct Tests ====================

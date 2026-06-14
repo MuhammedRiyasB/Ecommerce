@@ -23,7 +23,11 @@ namespace Ecommerce.Infrastructure
             services.AddDbContextPool<AppDbContext>(options =>
                 options.UseSqlServer(
                     configuration.GetConnectionString("DefaultConnection"),
-                    sqlOptions => sqlOptions.EnableRetryOnFailure()));
+                    sqlOptions => 
+                    {
+                        sqlOptions.EnableRetryOnFailure();
+                        sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                    }));
 
             // Repository & Unit of Work
             services.AddScoped(typeof(IRepository<>), typeof(Repository<>));

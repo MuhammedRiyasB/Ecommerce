@@ -201,6 +201,8 @@ namespace Ecommerce.Application.Services.Orders
                 cartItem.ProductVariant.Quantity -= cartItem.Quantity;
                 cartItem.Product.Quantity = cartItem.Product.Variants.Sum(variant =>
                     variant.Id == cartItem.ProductVariantId ? cartItem.ProductVariant.Quantity : variant.Quantity);
+                
+                cartItem.Product.TotalSold += cartItem.Quantity;
                 _productRepo.Update(cartItem.Product);
             }
         }
@@ -363,6 +365,12 @@ namespace Ecommerce.Application.Services.Orders
             {
                 item.ProductVariant.Quantity += item.Quantity;
                 item.Product.Quantity += item.Quantity;
+                
+                if (item.Product.TotalSold >= item.Quantity)
+                {
+                    item.Product.TotalSold -= item.Quantity;
+                }
+
                 _productRepo.Update(item.Product);
             }
 

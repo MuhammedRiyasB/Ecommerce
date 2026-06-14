@@ -28,6 +28,17 @@ namespace Ecommerce.Infrastructure.Data
 
             // Apply all IEntityTypeConfiguration classes from this assembly
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+            // Performance Indexes
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => new { p.CategoryId, p.SubCategoryId });
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.Slug);
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => new { p.TotalSold, p.CreatedAtUtc });
+
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => c.Slug);
         }
 
         // Override SaveChanges to handle soft delete automatically

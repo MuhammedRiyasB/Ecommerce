@@ -15,6 +15,7 @@ export interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
 }
 
@@ -25,6 +26,7 @@ const loadAuthState = (): AuthState => {
     return {
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
     };
   }
@@ -35,6 +37,7 @@ const loadAuthState = (): AuthState => {
       return {
         user: null,
         token: null,
+        refreshToken: null,
         isAuthenticated: false,
       };
     }
@@ -43,12 +46,14 @@ const loadAuthState = (): AuthState => {
     return {
       user: parsedState.user ?? null,
       token: parsedState.token ?? null,
+      refreshToken: parsedState.refreshToken ?? null,
       isAuthenticated: Boolean(parsedState.token),
     };
   } catch {
     return {
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
     };
   }
@@ -69,6 +74,7 @@ export const persistAuthState = (state: AuthState) => {
     JSON.stringify({
       user: state.user,
       token: state.token,
+      refreshToken: state.refreshToken,
     })
   );
 };
@@ -81,17 +87,19 @@ const authSlice = createSlice({
   reducers: {
     setCredentials: (
       state,
-      action: PayloadAction<{ user: User; accessToken: string }>
+      action: PayloadAction<{ user: User; accessToken: string; refreshToken: string }>
     ) => {
-      const { user, accessToken } = action.payload;
+      const { user, accessToken, refreshToken } = action.payload;
       state.user = user;
       state.token = accessToken;
+      state.refreshToken = refreshToken;
       state.isAuthenticated = true;
       persistAuthState(state);
     },
     logout: (state) => {
       state.user = null;
       state.token = null;
+      state.refreshToken = null;
       state.isAuthenticated = false;
       persistAuthState(state);
     },

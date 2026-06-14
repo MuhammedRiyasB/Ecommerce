@@ -42,6 +42,11 @@ namespace Ecommerce.Domain.Entities
         /// </summary>
         public decimal Discount { get; set; }
 
+        /// <summary>
+        /// Total number of units sold. Used for fast top-selling sorting.
+        /// </summary>
+        public int TotalSold { get; set; } = 0;
+
         public string Description { get; set; } = null!;
 
         /// <summary>

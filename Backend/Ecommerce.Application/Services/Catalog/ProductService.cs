@@ -228,8 +228,17 @@ namespace Ecommerce.Application.Services.Catalog
             query = ApplyFilters(query, categoryId, search, minPrice, maxPrice, color, size, categorySlug, isSale);
 
             var totalCount = await query.CountAsync();
+
+            if (isSale == true)
+            {
+                query = query.OrderByDescending(p => p.TotalSold).ThenByDescending(p => p.CreatedAtUtc);
+            }
+            else
+            {
+                query = query.OrderByDescending(p => p.CreatedAtUtc);
+            }
+
             var products = await query
-                .OrderByDescending(p => p.CreatedAtUtc)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -374,7 +383,24 @@ namespace Ecommerce.Application.Services.Catalog
             if (!string.IsNullOrWhiteSpace(categorySlug))
             {
                 var slugLower = categorySlug.ToLower();
-                query = query.Where(p => p.Category.Slug.ToLower() == slugLower || (p.SubCategory != null && p.SubCategory.Slug.ToLower() == slugLower));
+                if (slugLower == "formals")
+                {
+                    var formals = new[] { "shirts", "trousers", "jackets" };
+                    query = query.Where(p => 
+                        formals.Contains(p.Category.CategoryName.ToLower()) || 
+                        (p.SubCategory != null && formals.Contains(p.SubCategory.CategoryName.ToLower())));
+                }
+                else if (slugLower == "occasional" || slugLower == "occasionwear")
+                {
+                    var occasionwear = new[] { "t-shirts", "hoodies", "sweatshirts", "jeans", "cargo pants", "joggers", "shorts" };
+                    query = query.Where(p => 
+                        occasionwear.Contains(p.Category.CategoryName.ToLower()) || 
+                        (p.SubCategory != null && occasionwear.Contains(p.SubCategory.CategoryName.ToLower())));
+                }
+                else
+                {
+                    query = query.Where(p => p.Category.Slug.ToLower() == slugLower || (p.SubCategory != null && p.SubCategory.Slug.ToLower() == slugLower));
+                }
             }
 
             if (isSale == true)

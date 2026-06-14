@@ -7,7 +7,8 @@ using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
+using Ecommerce.Application.Extensions;
 using System.Text.RegularExpressions;
 
 namespace Ecommerce.Application.Services.Catalog
@@ -20,7 +21,7 @@ namespace Ecommerce.Application.Services.Catalog
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
         private readonly ICloudImageService _cloudImageService;
-        private readonly IMemoryCache _cache;
+        private readonly IDistributedCache _cache;
         private const string PRODUCTS_CACHE_KEY = "products_cache";
 
         public ProductService(
@@ -30,7 +31,7 @@ namespace Ecommerce.Application.Services.Catalog
             IUnitOfWork unitOfWork,
             IMapper mapper,
             ICloudImageService cloudImageService,
-            IMemoryCache cache)
+            IDistributedCache cache)
         {
             _productRepo = productRepo;
             _categoryRepo = categoryRepo;
@@ -177,7 +178,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var product = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -197,7 +197,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var product = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -219,9 +218,16 @@ namespace Ecommerce.Application.Services.Catalog
             string? categorySlug = null,
             bool? isSale = null)
         {
+            var cacheKey = $"products_p{pageNumber}_s{pageSize}_c{categoryId}_q{search}_min{minPrice}_max{maxPrice}_col{color}_sz{size}_slug{categorySlug}_sale{isSale}";
+            var cachedResult = await _cache.GetRecordAsync<PagedResult<ProductResponseDto>>(cacheKey);
+            
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -246,13 +252,16 @@ namespace Ecommerce.Application.Services.Catalog
                 .Take(pageSize)
                 .ToListAsync();
 
-            return new PagedResult<ProductResponseDto>
+            var result = new PagedResult<ProductResponseDto>
             {
                 Items = _mapper.Map<List<ProductResponseDto>>(products),
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
+
+            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
 
         public async Task<PagedResult<ProductResponseDto>> GetProductsByCategoryAsync(
@@ -321,7 +330,6 @@ namespace Ecommerce.Application.Services.Catalog
 
             var products = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -346,7 +354,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)

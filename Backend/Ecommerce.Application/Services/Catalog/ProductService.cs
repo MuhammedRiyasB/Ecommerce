@@ -177,7 +177,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var product = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -197,7 +196,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var product = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -221,7 +219,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -321,7 +318,6 @@ namespace Ecommerce.Application.Services.Catalog
 
             var products = await _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)
@@ -346,7 +342,6 @@ namespace Ecommerce.Application.Services.Catalog
         {
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .AsSplitQuery()
                 .Include(p => p.Category)
                 .Include(p => p.SubCategory)
                 .Include(p => p.ProductImages)

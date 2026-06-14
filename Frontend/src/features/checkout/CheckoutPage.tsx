@@ -70,7 +70,7 @@ const CheckoutPage: React.FC = () => {
 
   if (orderSuccess) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-dvh bg-gray-50">
         <div className="container mx-auto max-w-3xl px-4 py-8">
           <OrderSuccessScreen
             cart={orderSuccess.cart}
@@ -115,7 +115,7 @@ const CheckoutPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-dvh bg-gray-50">
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-10 flex items-center justify-center">
           {STEPS.map((step, index) => (

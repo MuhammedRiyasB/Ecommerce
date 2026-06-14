@@ -30,7 +30,7 @@ const WishlistPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-dvh bg-gray-50">
       <div className="container mx-auto max-w-5xl px-4 py-8">
         <h1 className="mb-8 text-2xl font-black uppercase tracking-tight text-gray-900">Wishlist</h1>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

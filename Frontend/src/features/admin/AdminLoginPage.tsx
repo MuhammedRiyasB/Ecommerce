@@ -54,7 +54,7 @@ const AdminLoginPage: React.FC = () => {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#111827] px-4 text-[#f8f5ee]">
+    <div className="grid min-h-dvh place-items-center bg-[#111827] px-4 text-[#f8f5ee]">
       <form onSubmit={handleSubmit} className="w-full max-w-md border border-[#303a4d] bg-[#172033] p-8 shadow-2xl shadow-black/30">
         <div className="mb-8">
           <div className="mb-5 grid h-12 w-12 place-items-center bg-[#d7b46a] text-[#111827]">

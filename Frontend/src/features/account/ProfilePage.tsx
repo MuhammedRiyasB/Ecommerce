@@ -73,7 +73,7 @@ const ProfilePage: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-dvh bg-gray-50">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         <div className="mb-6 border border-gray-100 bg-white p-6">
           <p className="text-xs font-black uppercase tracking-widest text-teal-600">My Profile</p>

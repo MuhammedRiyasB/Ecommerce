@@ -45,7 +45,7 @@ export default function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbfaf7] text-[#111827]">
+    <div className="min-h-dvh bg-[#fbfaf7] text-[#111827]">
       <header className="sticky top-0 z-30 border-b border-[#e8e0d0] bg-[#fbfaf7]/95 backdrop-blur-xl">
         <div className="container mx-auto flex h-32 items-center justify-between gap-5">
           <Link to="/" className="shrink-0 leading-none">

@@ -102,6 +102,12 @@ public class CustomWebAppFactory : WebApplicationFactory<Program>
             if (stripeDescriptor != null) services.Remove(stripeDescriptor);
             services.AddScoped(_ => stripeMock.Object);
 
+            // ===== Replace Redis with In-Memory Distributed Cache =====
+            var redisDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(Microsoft.Extensions.Caching.Distributed.IDistributedCache));
+            if (redisDescriptor != null) services.Remove(redisDescriptor);
+            services.AddDistributedMemoryCache();
+
             // ===== Remove the Health Check for SQL Server (not available in tests) =====
             var healthCheckDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService));

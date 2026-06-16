@@ -7,13 +7,7 @@ import type { CartResponse } from '@/features/cart/cartApiSlice';
 import type { Address } from '../addressApiSlice';
 import { toast } from 'react-toastify';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import type { StripeCardElementChangeEvent } from '@stripe/stripe-js';
-import {
-  getCardValidationMessage,
-  initialCardFieldState,
-  type CardFieldState,
-} from '../paymentCardValidation';
+import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 export interface OrderSuccessDetails {
   cart: CartResponse;
@@ -35,28 +29,17 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
-  const [cardField, setCardField] = useState<CardFieldState>(initialCardFieldState);
-  const [cardInlineError, setCardInlineError] = useState<string | null>(null);
-
-  const handleCardChange = (event: StripeCardElementChangeEvent) => {
-    const next: CardFieldState = {
-      empty: event.empty,
-      complete: event.complete,
-      errorCode: event.error?.code ?? null,
-      errorMessage: event.error?.message ?? null,
-    };
-    setCardField(next);
-    setCardInlineError(getCardValidationMessage(next));
-  };
+  const [cardErrors, setCardErrors] = useState<{ number: string | null; expiry: string | null; cvc: string | null }>({
+    number: null,
+    expiry: null,
+    cvc: null,
+  });
 
   const validateCardFields = (): boolean => {
-    const message = getCardValidationMessage(cardField);
-    if (message) {
-      setCardInlineError(message);
-      toast.error(message);
+    if (cardErrors.number || cardErrors.expiry || cardErrors.cvc) {
+      toast.error('Please fix the errors in your card details.');
       return false;
     }
-    setCardInlineError(null);
     return true;
   };
 
@@ -84,7 +67,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
     setIsProcessing(true);
     try {
       if (paymentMethod === 'card') {
-        const cardElement = activeElements!.getElement(CardElement);
+        const cardElement = activeElements!.getElement(CardNumberElement);
         if (!cardElement) throw new Error('Card element not found');
 
         const intentResult = await createPaymentIntent({ amount: finalAmount }).unwrap();
@@ -109,7 +92,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
                 ? 'The card number you entered is invalid. Please check and try again.'
                 : error?.message || 'Payment failed.';
           setFailureMessage(message);
-          setCardInlineError(message);
+          setFailureMessage(message);
           toast.error(message);
           setIsProcessing(false);
           return;
@@ -191,7 +174,7 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
   const cardElementOptions = {
     style: {
       base: {
-        fontSize: '14px',
+        fontSize: '16px',
         color: '#1f2937',
         '::placeholder': {
           color: '#9ca3af',
@@ -241,66 +224,106 @@ const CheckoutForm: React.FC<PaymentFormProps> = ({ cart, addressId, address, on
       <div className="border border-gray-100 bg-white p-6">
         <h3 className="mb-5 text-xs font-black uppercase tracking-widest text-gray-900">Choose Payment Method</h3>
         <div className="space-y-3">
-          <label
-            className={`flex cursor-pointer items-start gap-4 border p-4 transition-colors ${
+          <div
+            className={`border transition-colors ${
               paymentMethod === 'card' ? 'border-teal-600 bg-teal-50/30' : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <input
-              type="radio"
-              name="payment"
-              checked={paymentMethod === 'card'}
-              onChange={() => {
-                setPaymentMethod('card');
-                setCardInlineError(null);
-              }}
-              className="mt-1 accent-teal-600"
-            />
-            <div className="flex-1">
-              <div className="mb-1 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-gray-600" />
-                <p className="text-sm font-bold text-gray-900">Credit / Debit Card</p>
-              </div>
-              <p className="mb-4 text-xs text-gray-500">Secure payment via Stripe</p>
-
-              {paymentMethod === 'card' && (
-                <div className="mt-4">
-                  <div
-                    className={`rounded-sm border bg-white p-4 transition-colors ${
-                      cardInlineError ? 'border-red-400' : 'border-gray-200'
-                    }`}
-                  >
-                    <CardElement options={cardElementOptions} onChange={handleCardChange} />
-                  </div>
-                  {cardInlineError && (
-                    <p className="mt-2 text-xs font-medium text-red-600">{cardInlineError}</p>
-                  )}
+            <label className="flex cursor-pointer items-start gap-3 sm:gap-4 p-3 sm:p-4">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentMethod === 'card'}
+                onChange={() => {
+                  setPaymentMethod('card');
+                  setCardErrors({ number: null, expiry: null, cvc: null });
+                }}
+                className="mt-1 accent-teal-600"
+              />
+              <div className="flex-1">
+                <div className="mb-1 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-gray-600" />
+                  <p className="text-sm font-bold text-gray-900">Credit / Debit Card</p>
                 </div>
-              )}
-            </div>
-          </label>
+                <p className="text-xs text-gray-500">Secure payment via Stripe</p>
+              </div>
+            </label>
 
-          <label
-            className={`flex cursor-pointer items-center gap-4 border p-4 transition-colors ${
+            {paymentMethod === 'card' && (
+              <div className="px-3 pb-3 sm:px-4 sm:pb-4 pt-0 pl-9 sm:pl-10">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-500">Card Number</label>
+                    <div
+                      className={`rounded-sm border bg-white p-3 sm:p-4 transition-colors ${
+                        cardErrors.number ? 'border-red-400' : 'border-gray-200'
+                      }`}
+                    >
+                      <CardNumberElement 
+                        options={cardElementOptions} 
+                        onChange={(e) => setCardErrors(p => ({ ...p, number: e.error?.message || null }))} 
+                      />
+                    </div>
+                    {cardErrors.number && <p className="mt-1.5 text-xs font-medium text-red-600">{cardErrors.number}</p>}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-500">Expiration Date</label>
+                      <div
+                        className={`rounded-sm border bg-white p-3 sm:p-4 transition-colors ${
+                          cardErrors.expiry ? 'border-red-400' : 'border-gray-200'
+                        }`}
+                      >
+                        <CardExpiryElement 
+                          options={cardElementOptions} 
+                          onChange={(e) => setCardErrors(p => ({ ...p, expiry: e.error?.message || null }))} 
+                        />
+                      </div>
+                      {cardErrors.expiry && <p className="mt-1.5 text-xs font-medium text-red-600">{cardErrors.expiry}</p>}
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-500">CVC</label>
+                      <div
+                        className={`rounded-sm border bg-white p-3 sm:p-4 transition-colors ${
+                          cardErrors.cvc ? 'border-red-400' : 'border-gray-200'
+                        }`}
+                      >
+                        <CardCvcElement 
+                          options={cardElementOptions} 
+                          onChange={(e) => setCardErrors(p => ({ ...p, cvc: e.error?.message || null }))} 
+                        />
+                      </div>
+                      {cardErrors.cvc && <p className="mt-1.5 text-xs font-medium text-red-600">{cardErrors.cvc}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div
+            className={`border transition-colors ${
               paymentMethod === 'cod' ? 'border-teal-600 bg-teal-50/30' : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <input
-              type="radio"
-              name="payment"
-              checked={paymentMethod === 'cod'}
-              onChange={() => {
-                setPaymentMethod('cod');
-                setCardField(initialCardFieldState);
-                setCardInlineError(null);
-              }}
-              className="accent-teal-600"
-            />
-            <div>
-              <p className="text-sm font-bold text-gray-900">Cash on Delivery</p>
-              <p className="text-xs text-gray-500">Pay when your order arrives</p>
-            </div>
-          </label>
+            <label className="flex cursor-pointer items-center gap-3 sm:gap-4 p-3 sm:p-4">
+              <input
+                type="radio"
+                name="payment"
+                checked={paymentMethod === 'cod'}
+                onChange={() => {
+                  setPaymentMethod('cod');
+                  setCardErrors({ number: null, expiry: null, cvc: null });
+                }}
+                className="accent-teal-600"
+              />
+              <div>
+                <p className="text-sm font-bold text-gray-900">Cash on Delivery</p>
+                <p className="text-xs text-gray-500">Pay when your order arrives</p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
 

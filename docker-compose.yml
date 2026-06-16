@@ -8,6 +8,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ConnectionStrings__DefaultConnection=${PROD_DB_CONNECTION}
+      - ConnectionStrings__Redis=${REDIS_CONNECTION_STRING}
       - StripeSettings__SecretKey=${STRIPE_SECRET_KEY}
       - StripeSettings__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
       - CloudinarySettings__CloudName=${CLOUDINARY_CLOUD_NAME}

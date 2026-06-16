@@ -425,7 +425,8 @@ namespace Ecommerce.Application.Services.Catalog
                 var searchLower = search.ToLower();
                 query = query.Where(p =>
                     p.ProductName.ToLower().Contains(searchLower) ||
-                    p.Description.ToLower().Contains(searchLower));
+                    p.Category.CategoryName.ToLower().Contains(searchLower) ||
+                    (p.SubCategory != null && p.SubCategory.CategoryName.ToLower().Contains(searchLower)));
             }
 
             if (minPrice.HasValue)

@@ -221,23 +221,25 @@ const Home: React.FC = () => {
           <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#111827]/90 to-transparent" />
 
           <div className="container relative mx-auto flex min-h-[560px] items-center py-16 md:min-h-[680px]">
-            <div className="max-w-2xl text-white">
-              <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[#d7b46a]">{currentSlide?.eyebrow}</p>
-              <h1 className="mt-5 text-5xl font-black uppercase leading-[0.94] tracking-[0.06em] sm:text-7xl">
+            <div className="mx-auto max-w-2xl px-4 text-center md:mx-0 md:px-0 md:text-left text-white">
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.36em] text-[#d7b46a]">{currentSlide?.eyebrow}</p>
+              <h1 className="mt-4 sm:mt-5 text-4xl sm:text-5xl md:text-7xl font-black uppercase leading-[1.1] md:leading-[0.94] tracking-[0.06em]">
                 {currentSlide?.title}
               </h1>
-              <p className="mt-5 max-w-xl text-base font-medium leading-7 text-[#f1eadf] sm:text-lg">{currentSlide?.copy}</p>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
+              <p className="mx-auto mt-4 sm:mt-5 max-w-xl text-sm sm:text-base md:text-lg font-medium leading-6 sm:leading-7 text-[#f1eadf] md:mx-0">
+                {currentSlide?.copy}
+              </p>
+              <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-4 md:justify-start">
                 <Link
                   to={currentSlide?.href || '/catalog'}
-                  className="inline-flex h-12 items-center gap-3 bg-[#d7b46a] px-8 text-[11px] font-black uppercase tracking-[0.22em] text-[#111827] transition-colors hover:bg-[#e2c77f]"
+                  className="inline-flex h-12 w-full sm:w-auto items-center justify-center gap-3 bg-[#d7b46a] px-8 text-[11px] font-black uppercase tracking-[0.22em] text-[#111827] transition-colors hover:bg-[#e2c77f]"
                 >
                   {currentSlide?.cta || 'Shop now'}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   to="/catalog"
-                  className="inline-flex h-12 items-center border border-white/60 px-8 text-[11px] font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-white hover:text-[#111827]"
+                  className="inline-flex h-12 w-full sm:w-auto items-center justify-center border border-white/60 px-8 text-[11px] font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-white hover:text-[#111827]"
                 >
                   View all products
                 </Link>

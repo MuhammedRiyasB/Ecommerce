@@ -19,19 +19,34 @@ namespace Ecommerce.Application.Extensions
             };
 
             var jsonData = JsonSerializer.Serialize(data);
-            await cache.SetStringAsync(recordId, jsonData, options);
+            try
+            {
+                await cache.SetStringAsync(recordId, jsonData, options);
+            }
+            catch (Exception)
+            {
+                // Fallback: Ignore cache set failure if Redis is down
+            }
         }
 
         public static async Task<T?> GetRecordAsync<T>(this IDistributedCache cache, string recordId)
         {
-            var jsonData = await cache.GetStringAsync(recordId);
-
-            if (jsonData is null)
+            try
             {
+                var jsonData = await cache.GetStringAsync(recordId);
+
+                if (jsonData is null)
+                {
+                    return default;
+                }
+
+                return JsonSerializer.Deserialize<T>(jsonData);
+            }
+            catch (Exception)
+            {
+                // Fallback: If cache fails, treat as cache miss
                 return default;
             }
-
-            return JsonSerializer.Deserialize<T>(jsonData);
         }
     }
 }

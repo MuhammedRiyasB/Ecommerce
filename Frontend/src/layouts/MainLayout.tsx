@@ -1,12 +1,14 @@
+import { useState, useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Heart, Search, ShoppingBag, User } from 'lucide-react';
-import { useSelector } from 'react-redux';
+import { Heart, Menu, Search, ShoppingBag, User, X } from 'lucide-react';
+import { useSelector, useDispatch } from 'react-redux';
 import { selectCartCount } from '../features/cart/cartSlice';
-import { selectCurrentUser, selectIsAuthenticated } from '../features/auth/authSlice';
+import { selectCurrentUser, selectIsAuthenticated, logout } from '../features/auth/authSlice';
 import AuthModal from '../features/auth/AuthModal';
 import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 
 import { useGetMeQuery } from '../features/auth/authApiSlice';
+import { useGetProductsQuery } from '../features/catalog/catalogApiSlice';
 
 const navItems = [
   { label: 'New Arrivals', href: '/catalog?newArrivals=true' },
@@ -28,6 +30,27 @@ export default function MainLayout() {
   const [searchParams] = useSearchParams();
   const isAuthModalOpen = searchParams.get('auth') === 'login' && !isAuthenticated;
   const redirectTo = searchParams.get('redirectTo') || location.pathname;
+  const dispatch = useDispatch();
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const { data: searchResults, isFetching, isError } = useGetProductsQuery(
+    { search: searchQuery, pageSize: 6 },
+    { skip: !searchQuery.trim() }
+  );
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+    setIsSearchOpen(false);
+    setSearchQuery('');
+  }, [location.pathname, location.search]);
+
+  const handleLogout = () => {
+    setIsMobileMenuOpen(false);
+    dispatch(logout());
+  };
 
   const openAuthModal = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -47,9 +70,20 @@ export default function MainLayout() {
   return (
     <div className="min-h-dvh bg-[#fbfaf7] text-[#111827]">
       <header className="sticky top-0 z-30 border-b border-[#e8e0d0] bg-[#fbfaf7]/95 backdrop-blur-xl">
-        <div className="container mx-auto flex h-32 items-center justify-between gap-5">
+        <div className="container mx-auto flex h-20 lg:h-32 items-center justify-between gap-4 px-4 lg:gap-5 lg:px-8">
+          <div className="flex items-center gap-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+
           <Link to="/" className="shrink-0 leading-none">
-            <img src="/logo.jpeg" alt="Urbaniq" className="h-[120px] w-auto object-contain mix-blend-multiply" />
+            <img src="/logo.jpeg" alt="Urbaniq" className="h-[70px] lg:h-[120px] w-auto object-contain mix-blend-multiply" />
           </Link>
 
           <nav className="hidden items-center gap-7 lg:flex">
@@ -68,14 +102,77 @@ export default function MainLayout() {
             ))}
           </nav>
 
+          {/* Desktop Search */}
+          <div className="hidden flex-1 max-w-sm px-6 lg:block relative z-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                onBlur={() => setTimeout(() => setIsSearchOpen(false), 200)}
+                placeholder="Search products..."
+                className="w-full bg-[#fbfaf7] border border-[#d8cdbb] h-10 pl-10 pr-4 text-[11px] font-black uppercase tracking-[0.1em] text-[#111827] placeholder:text-[#a39f97] focus:outline-none focus:border-[#9d731e] transition-colors"
+              />
+            </div>
+            
+            {/* Desktop Search Dropdown */}
+            {isSearchOpen && searchQuery.trim() && (
+              <div 
+                className="absolute top-full left-6 right-6 mt-1 bg-white border border-[#e8e0d0] shadow-xl rounded-sm overflow-hidden z-50"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {isFetching && !searchResults ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#a39f97] uppercase tracking-widest">
+                    Loading...
+                  </div>
+                ) : isError ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
+                    Error loading results
+                  </div>
+                ) : searchResults && searchResults.items.length === 0 ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
+                    No product exists with name "{searchQuery}"
+                  </div>
+                ) : searchResults ? (
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {searchResults.items.map(product => (
+                      <Link
+                        key={product.id}
+                        to={`/product/${product.slug}`}
+                        onClick={() => {
+                          setIsSearchOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className="flex items-center gap-4 p-3 hover:bg-[#fbfaf7] transition-colors border-b border-[#e8e0d0] last:border-0"
+                      >
+                        <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
+                           <img src={product.image || product.images?.[0]} className="h-full w-full object-cover" alt="" />
+                        </div>
+                        <div className="flex flex-col">
+                           <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>
+                           <p className="mt-1 text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
-            <Link
-              to="/catalog"
-              className="grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="grid lg:hidden h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e]"
               aria-label="Search catalog"
             >
-              <Search className="h-4 w-4" />
-            </Link>
+              {isSearchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            </button>
             <Link
               to="/wishlist"
               className="hidden h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827] transition-colors hover:border-[#9d731e] sm:grid"
@@ -117,9 +214,160 @@ export default function MainLayout() {
         </div>
       </header>
 
+      {/* Mobile Search Dropdown */}
+      {isSearchOpen && (
+        <div className="absolute top-[80px] left-0 right-0 z-40 bg-[#fbfaf7] border-b border-[#e8e0d0] p-4 shadow-md lg:hidden">
+           <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products..."
+                className="w-full bg-white border border-[#d8cdbb] h-10 pl-10 pr-4 text-[11px] font-black uppercase tracking-[0.1em] text-[#111827] placeholder:text-[#a39f97] focus:outline-none focus:border-[#9d731e]"
+              />
+           </div>
+           {searchQuery.trim() && (
+              <div 
+                className="mt-2 bg-white border border-[#e8e0d0] shadow-sm max-h-[60vh] overflow-y-auto"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {isFetching && !searchResults ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#a39f97] uppercase tracking-widest">Loading...</div>
+                ) : isError ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">Error</div>
+                ) : searchResults && searchResults.items.length === 0 ? (
+                  <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
+                    No product exists with name "{searchQuery}"
+                  </div>
+                ) : searchResults ? (
+                  searchResults.items.map(product => (
+                      <Link
+                        key={product.id}
+                        to={`/product/${product.slug}`}
+                        onClick={() => {
+                          setIsSearchOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className="flex items-center gap-4 p-3 hover:bg-[#fbfaf7] transition-colors border-b border-[#e8e0d0] last:border-0"
+                      >
+                        <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
+                           <img src={product.image || product.images?.[0]} className="h-full w-full object-cover" alt="" />
+                        </div>
+                        <div className="flex flex-col">
+                           <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>
+                           <p className="mt-1 text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</p>
+                        </div>
+                      </Link>
+                  ))
+                ) : null}
+              </div>
+           )}
+        </div>
+      )}
+
       <main>
         <Outlet />
       </main>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div 
+            className="fixed inset-0 bg-[#111827]/60 backdrop-blur-md transition-opacity" 
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden="true" 
+          />
+          <div className="relative flex w-[200px] flex-col overflow-y-auto bg-[#111827] shadow-2xl transition-transform [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {/* Header with Logo and Close */}
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
+              <Link to="/" onClick={() => setIsMobileMenuOpen(false)}>
+                <img src="/logo.jpeg" alt="Urbaniq" className="h-8 w-auto object-contain invert opacity-90" />
+              </Link>
+              <button
+                type="button"
+                className="relative -mr-2 inline-flex items-center justify-center rounded-full p-2 text-[#a39f97] transition-colors hover:bg-white/5 hover:text-white"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <span className="sr-only">Close menu</span>
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Main Navigation Links */}
+            <div className="mt-6 flex flex-col space-y-1 px-4">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.label}
+                  to={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `group relative flex items-center overflow-hidden rounded-sm px-4 py-3.5 text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+                      isActive 
+                        ? 'bg-[#d7b46a]/10 text-[#d7b46a]' 
+                        : 'text-[#a39f97] hover:bg-white/5 hover:text-white'
+                    }`
+                  }
+                >
+                  <span className="relative z-10">{item.label}</span>
+                  {/* Subtle hover effect bar */}
+                  <span className="absolute left-0 top-0 h-full w-1 origin-left scale-y-0 bg-[#d7b46a] transition-transform duration-300 group-hover:scale-y-100" />
+                </NavLink>
+              ))}
+            </div>
+
+            {/* Bottom Auxiliary Links */}
+            <div className="mt-auto px-8 pb-10 pt-10">
+              <div className="mb-6 h-px w-8 bg-white/20" />
+              <div className="flex flex-col gap-5 text-[10px] font-bold uppercase tracking-widest text-[#6f6b61]">
+                {isAuthenticated ? (
+                  <Link 
+                    to={user?.role === 'Admin' ? '/admin' : '/account'} 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="transition-colors hover:text-[#d7b46a]"
+                  >
+                    My Account
+                  </Link>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      openAuthModal();
+                    }} 
+                    className="text-left transition-colors hover:text-[#d7b46a]"
+                  >
+                    Sign In / Register
+                  </button>
+                )}
+                <Link 
+                  to="/cart" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="transition-colors hover:text-[#d7b46a]"
+                >
+                  Bag {cartCount > 0 && `(${cartCount})`}
+                </Link>
+                <Link 
+                  to="/wishlist" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="transition-colors hover:text-[#d7b46a]"
+                >
+                  Wishlist
+                </Link>
+                {isAuthenticated && (
+                  <button 
+                    onClick={handleLogout}
+                    className="text-left transition-colors hover:text-[#d7b46a]"
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} redirectTo={redirectTo} />
       <VerifyEmailPromptModal />

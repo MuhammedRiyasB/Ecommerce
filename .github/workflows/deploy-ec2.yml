@@ -70,6 +70,7 @@ jobs:
             cat << 'EOF' > .env
             DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
             PROD_DB_CONNECTION=${{ secrets.PROD_DB_CONNECTION }}
+            REDIS_CONNECTION_STRING=${{ secrets.REDIS_CONNECTION_STRING }}
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
             STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}

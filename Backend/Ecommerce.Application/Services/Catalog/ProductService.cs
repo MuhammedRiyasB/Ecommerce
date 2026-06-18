@@ -425,6 +425,57 @@ namespace Ecommerce.Application.Services.Catalog
         }
 
         /// <summary>
+        /// Lightweight search suggestions optimized for the autocomplete dropdown.
+        /// Uses EF Core projection (.Select) to avoid Include joins entirely —
+        /// only the columns needed for the dropdown are fetched from the database.
+        /// Results are cached in Redis for 30 seconds per search term.
+        /// </summary>
+        public async Task<List<SearchSuggestionDto>> SearchSuggestionsAsync(string query, int limit = 6)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return new List<SearchSuggestionDto>();
+
+            // Clamp limit to prevent abuse via query string manipulation
+            limit = Math.Clamp(limit, 1, 20);
+
+            var searchTerm = query.Trim().ToLower();
+            var cacheKey = $"search_suggest_{searchTerm}_{limit}";
+            TrackCacheKey(cacheKey);
+
+            // Check Redis cache first — 30s TTL keeps suggestions fresh while reducing DB load
+            var cachedResult = await _cache.GetRecordAsync<List<SearchSuggestionDto>>(cacheKey);
+            if (cachedResult != null)
+                return cachedResult;
+
+            // Projection-only query: no Include joins, no navigation property loading
+            // EF Core translates this to a simple SELECT with a single JOIN to Category
+            var suggestions = await _productRepo.Query()
+                .AsNoTracking()
+                .Where(p =>
+                    p.ProductName.ToLower().Contains(searchTerm) ||
+                    p.Category.CategoryName.ToLower().Contains(searchTerm) ||
+                    (p.SubCategory != null && p.SubCategory.CategoryName.ToLower().Contains(searchTerm)))
+                .OrderByDescending(p => p.ProductName.ToLower().StartsWith(searchTerm) ? 1 : 0)
+                .ThenByDescending(p => p.TotalSold)
+                .Take(limit)
+                .Select(p => new SearchSuggestionDto
+                {
+                    Id = p.Id,
+                    ProductName = p.ProductName,
+                    Slug = p.Slug,
+                    Image = p.Image,
+                    Price = p.Price,
+                    Discount = p.Discount,
+                    CategoryName = p.Category.CategoryName
+                })
+                .ToListAsync();
+
+            // Short cache TTL (30s) — search suggestions should be fresh but avoid repeated DB hits
+            await _cache.SetRecordAsync(cacheKey, suggestions, TimeSpan.FromSeconds(30));
+            return suggestions;
+        }
+
+        /// <summary>
         /// Tracks a cache key in the active set for bulk invalidation on product mutations.
         /// Thread-safe via lock to handle concurrent requests.
         /// </summary>

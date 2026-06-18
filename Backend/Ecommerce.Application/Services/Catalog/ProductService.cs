@@ -23,6 +23,12 @@ namespace Ecommerce.Application.Services.Catalog
         private readonly ICloudImageService _cloudImageService;
         private readonly IDistributedCache _cache;
         private const string PRODUCTS_CACHE_KEY = "products_cache";
+        private const string RECENT_PRODUCTS_CACHE_PREFIX = "recent_products_";
+        private const string TOP_SELLING_CACHE_PREFIX = "top_selling_";
+        private const string SUBCATEGORY_CACHE_PREFIX = "subcategory_products_";
+
+        // Track active cache keys for efficient invalidation on product mutations
+        private static readonly HashSet<string> _activeCacheKeys = new(StringComparer.OrdinalIgnoreCase);
 
         public ProductService(
             IRepository<Product> productRepo,
@@ -99,7 +105,7 @@ namespace Ecommerce.Application.Services.Catalog
 
             await _productRepo.AddAsync(product);
             await _unitOfWork.SaveChangesAsync();
-            _cache.Remove(PRODUCTS_CACHE_KEY);
+            await InvalidateAllProductCachesAsync();
         }
 
         public async Task<bool> UpdateProductAsync(Guid id, CreateProductRequestDto productDto, IReadOnlyCollection<IFormFile> images)
@@ -156,7 +162,7 @@ namespace Ecommerce.Application.Services.Catalog
 
             _productRepo.Update(product);
             await _unitOfWork.SaveChangesAsync();
-            _cache.Remove(PRODUCTS_CACHE_KEY);
+            await InvalidateAllProductCachesAsync();
             return true;
         }
 
@@ -170,7 +176,7 @@ namespace Ecommerce.Application.Services.Catalog
 
             _productRepo.Remove(product);
             await _unitOfWork.SaveChangesAsync();
-            _cache.Remove(PRODUCTS_CACHE_KEY);
+            await InvalidateAllProductCachesAsync();
             return true;
         }
 
@@ -219,6 +225,7 @@ namespace Ecommerce.Application.Services.Catalog
             bool? isSale = null)
         {
             var cacheKey = $"products_p{pageNumber}_s{pageSize}_c{categoryId}_q{search}_min{minPrice}_max{maxPrice}_col{color}_sz{size}_slug{categorySlug}_sale{isSale}";
+            TrackCacheKey(cacheKey);
             var cachedResult = await _cache.GetRecordAsync<PagedResult<ProductResponseDto>>(cacheKey);
             
             if (cachedResult != null)
@@ -273,11 +280,22 @@ namespace Ecommerce.Application.Services.Catalog
         /// <summary>
         /// Returns recent products ordered by CreatedAtUtc descending.
         /// Supports pagination and optional price range filtering.
+        /// Results are cached in Redis for 5 minutes to reduce database load.
         /// </summary>
         public async Task<PagedResult<ProductResponseDto>> GetRecentProductsAsync(
             int pageNumber = 1, int pageSize = 10,
             decimal? minPrice = null, decimal? maxPrice = null)
         {
+            // Build unique cache key based on query parameters
+            var cacheKey = $"{RECENT_PRODUCTS_CACHE_PREFIX}p{pageNumber}_s{pageSize}_min{minPrice}_max{maxPrice}";
+            TrackCacheKey(cacheKey);
+
+            var cachedResult = await _cache.GetRecordAsync<PagedResult<ProductResponseDto>>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
             var query = _productRepo.Query()
                 .AsNoTracking()
                 .Include(p => p.Category)
@@ -300,21 +318,35 @@ namespace Ecommerce.Application.Services.Catalog
                 .Take(pageSize)
                 .ToListAsync();
 
-            return new PagedResult<ProductResponseDto>
+            var result = new PagedResult<ProductResponseDto>
             {
                 Items = _mapper.Map<List<ProductResponseDto>>(products),
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
+
+            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
 
         /// <summary>
         /// Returns top-selling products by aggregating OrderItem quantities.
         /// Groups sold quantities per product and returns the highest sellers.
+        /// Results are cached in Redis for 5 minutes to avoid expensive aggregation queries.
         /// </summary>
         public async Task<List<ProductResponseDto>> GetTopSellingProductsAsync(int count = 10)
         {
+            // Build unique cache key based on requested count
+            var cacheKey = $"{TOP_SELLING_CACHE_PREFIX}c{count}";
+            TrackCacheKey(cacheKey);
+
+            var cachedResult = await _cache.GetRecordAsync<List<ProductResponseDto>>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
             // Aggregate total sold quantity per product from order items
             var topProductIds = await _orderItemRepo.Query()
                 .AsNoTracking()
@@ -343,15 +375,28 @@ namespace Ecommerce.Application.Services.Catalog
                 .Where(p => p != null)
                 .ToList();
 
-            return _mapper.Map<List<ProductResponseDto>>(ordered);
+            var result = _mapper.Map<List<ProductResponseDto>>(ordered);
+            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
 
         /// <summary>
         /// Returns products filtered by subcategory (leaf category in the hierarchy).
+        /// Results are cached in Redis for 5 minutes to reduce database load.
         /// </summary>
         public async Task<PagedResult<ProductResponseDto>> GetProductsBySubCategoryAsync(
             int subCategoryId, int pageNumber = 1, int pageSize = 10)
         {
+            // Build unique cache key based on subcategory and pagination
+            var cacheKey = $"{SUBCATEGORY_CACHE_PREFIX}sc{subCategoryId}_p{pageNumber}_s{pageSize}";
+            TrackCacheKey(cacheKey);
+
+            var cachedResult = await _cache.GetRecordAsync<PagedResult<ProductResponseDto>>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
             var query = _productRepo.Query()
                 .AsNoTracking()
                 .Include(p => p.Category)
@@ -367,13 +412,58 @@ namespace Ecommerce.Application.Services.Catalog
                 .Take(pageSize)
                 .ToListAsync();
 
-            return new PagedResult<ProductResponseDto>
+            var result = new PagedResult<ProductResponseDto>
             {
                 Items = _mapper.Map<List<ProductResponseDto>>(products),
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
+
+            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
+        }
+
+        /// <summary>
+        /// Tracks a cache key in the active set for bulk invalidation on product mutations.
+        /// Thread-safe via lock to handle concurrent requests.
+        /// </summary>
+        private static void TrackCacheKey(string cacheKey)
+        {
+            lock (_activeCacheKeys)
+            {
+                _activeCacheKeys.Add(cacheKey);
+            }
+        }
+
+        /// <summary>
+        /// Invalidates all tracked product cache entries when a product is added, updated, or deleted.
+        /// Ensures users always see fresh data after admin modifications.
+        /// </summary>
+        private async Task InvalidateAllProductCachesAsync()
+        {
+            // Remove the legacy products cache key
+            _cache.Remove(PRODUCTS_CACHE_KEY);
+
+            // Remove all dynamically tracked cache keys
+            string[] keysToRemove;
+            lock (_activeCacheKeys)
+            {
+                keysToRemove = _activeCacheKeys.ToArray();
+                _activeCacheKeys.Clear();
+            }
+
+            foreach (var key in keysToRemove)
+            {
+                try
+                {
+                    await _cache.RemoveAsync(key);
+                }
+                catch (Exception)
+                {
+                    // Fallback: Ignore cache removal failure if Redis is temporarily unavailable
+                }
+            }
         }
 
         private static IQueryable<Product> ApplyFilters(

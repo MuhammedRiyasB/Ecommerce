@@ -287,7 +287,7 @@ const ProductDetailPage: React.FC = () => {
           </div>
 
           <section className="bg-white p-6 shadow-sm sm:p-8 lg:sticky lg:top-36 lg:self-start">
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#9d731e]">Urbaniq Atelier</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#9d731e]">Urbaniq</p>
             <h1 className="mt-3 text-2xl font-black uppercase leading-tight tracking-[0.06em] text-[#111827] sm:text-3xl">
               {product.productName}
             </h1>

@@ -159,6 +159,22 @@ namespace Ecommerce.Api.Controllers.Catalog
         }
 
         /// <summary>
+        /// Returns lightweight search suggestions for the storefront autocomplete dropdown.
+        /// Optimized for speed — uses projection queries with no heavy joins.
+        /// </summary>
+        [HttpGet("SearchSuggestions")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SearchSuggestions(
+            [FromQuery] string query,
+            [FromQuery] int limit = 6)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return Ok(Array.Empty<object>());
+
+            return Ok(await _productService.SearchSuggestionsAsync(query, limit));
+        }
+
+        /// <summary>
         /// Returns products filtered by subcategory (leaf category in the hierarchy).
         /// </summary>
         [HttpGet("subcategory/{subCategoryId}")]

@@ -77,5 +77,12 @@ namespace Ecommerce.Application.Interfaces.Catalog
         /// </summary>
         Task<PagedResult<ProductResponseDto>> GetProductsBySubCategoryAsync(
             int subCategoryId, int pageNumber = 1, int pageSize = 10);
+
+        /// <summary>
+        /// Returns lightweight search suggestions for the autocomplete dropdown.
+        /// Uses projection-only queries (no Include joins) for maximum performance.
+        /// Results are cached in Redis for 30 seconds per query term.
+        /// </summary>
+        Task<List<SearchSuggestionDto>> SearchSuggestionsAsync(string query, int limit = 6);
     }
 }

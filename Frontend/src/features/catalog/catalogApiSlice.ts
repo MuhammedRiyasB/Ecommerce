@@ -61,6 +61,18 @@ export interface PaginatedResponse<T> {
   totalCount: number;
 }
 
+/// Lightweight suggestion returned by the SearchSuggestions endpoint.
+/// Contains only the minimal fields needed for the autocomplete dropdown.
+export interface SearchSuggestion {
+  id: string;
+  productName: string;
+  slug: string;
+  image: string;
+  price: number;
+  discount: number;
+  categoryName: string;
+}
+
 export interface ProductParams {
   pageNumber?: number;
   pageSize?: number;
@@ -162,6 +174,17 @@ export const catalogApiSlice = apiSlice.injectEndpoints({
       }),
       providesTags: [{ type: 'Product', id: 'LIST' }],
     }),
+
+    // Lightweight search suggestions — debounced autocomplete dropdown
+    // Uses projection-only backend query for maximum speed
+    searchSuggestions: builder.query<SearchSuggestion[], { query: string; limit?: number }>({
+      query: ({ query, limit = 6 }) => ({
+        url: '/Product/SearchSuggestions',
+        params: { query, limit },
+      }),
+      // Keep cached suggestions for 60s to avoid re-fetching on repeated queries
+      keepUnusedDataFor: 60,
+    }),
   }),
 });
 
@@ -177,4 +200,5 @@ export const {
   useGetRecentProductsQuery,
   useGetTopSellingProductsQuery,
   useGetProductsBySubCategoryQuery,
+  useSearchSuggestionsQuery,
 } = catalogApiSlice;

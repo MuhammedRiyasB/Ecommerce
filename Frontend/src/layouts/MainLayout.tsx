@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Heart, Menu, Search, ShoppingBag, User, X } from 'lucide-react';
+import { Heart, Menu, Search, ShoppingBag, User, X, Loader2 } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCartCount } from '../features/cart/cartSlice';
 import { selectCurrentUser, selectIsAuthenticated, logout } from '../features/auth/authSlice';
@@ -8,7 +8,9 @@ import AuthModal from '../features/auth/AuthModal';
 import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 
 import { useGetMeQuery } from '../features/auth/authApiSlice';
-import { useGetProductsQuery } from '../features/catalog/catalogApiSlice';
+import { useSearchSuggestionsQuery } from '../features/catalog/catalogApiSlice';
+import type { SearchSuggestion } from '../features/catalog/catalogApiSlice';
+import { useDebounce } from '../hooks/useDebounce';
 
 const navItems = [
   { label: 'New Arrivals', href: '/catalog?newArrivals=true' },
@@ -35,17 +37,75 @@ export default function MainLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: searchResults, isFetching, isError } = useGetProductsQuery(
-    { search: searchQuery, pageSize: 6 },
-    { skip: !searchQuery.trim() }
+  // Debounce search input — API only fires after user pauses typing for 300ms
+  const debouncedQuery = useDebounce(searchQuery.trim(), 300);
+  const isTyping = searchQuery.trim() !== '' && debouncedQuery !== searchQuery.trim();
+
+  const { data: suggestions, isFetching, isError } = useSearchSuggestionsQuery(
+    { query: debouncedQuery, limit: 6 },
+    {
+      skip: !debouncedQuery,
+      // Refetch on arg change but keep previous data visible while loading
+      refetchOnMountOrArgChange: false,
+    }
   );
 
+  // Determine what to display: show previous results while new ones load
+  const displayResults: SearchSuggestion[] = suggestions ?? [];
+  const hasQuery = searchQuery.trim().length > 0;
+  const showDropdown = isSearchOpen && hasQuery;
+  const isLoading = (isTyping || isFetching) && displayResults.length === 0;
+
+  // Navigate to a selected product suggestion and close the dropdown
+  const handleSelectSuggestion = useCallback((slug: string) => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+    setActiveIndex(-1);
+    navigate(`/product/${slug}`);
+  }, [navigate]);
+
+  // Keyboard navigation: arrow keys to move, Enter to select, Escape to close
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showDropdown || displayResults.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex(prev => (prev < displayResults.length - 1 ? prev + 1 : 0));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex(prev => (prev > 0 ? prev - 1 : displayResults.length - 1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0 && activeIndex < displayResults.length) {
+          handleSelectSuggestion(displayResults[activeIndex].slug);
+        }
+        break;
+      case 'Escape':
+        setIsSearchOpen(false);
+        setActiveIndex(-1);
+        break;
+    }
+  }, [showDropdown, displayResults, activeIndex, handleSelectSuggestion]);
+
+  // Reset search state on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
     setIsSearchOpen(false);
     setSearchQuery('');
+    setActiveIndex(-1);
   }, [location.pathname, location.search]);
+
+  // Reset active index when results change
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [debouncedQuery]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -105,59 +165,84 @@ export default function MainLayout() {
           {/* Desktop Search */}
           <div className="hidden flex-1 max-w-sm px-6 lg:block relative z-50">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              {isTyping || isFetching ? (
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9d731e] animate-spin" />
+              ) : (
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              )}
               <input
+                ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setIsSearchOpen(true);
                 }}
+                onKeyDown={handleSearchKeyDown}
                 onFocus={() => setIsSearchOpen(true)}
                 onBlur={() => setTimeout(() => setIsSearchOpen(false), 200)}
                 placeholder="Search products..."
                 className="w-full bg-[#fbfaf7] border border-[#d8cdbb] h-10 pl-10 pr-4 text-[11px] font-black uppercase tracking-[0.1em] text-[#111827] placeholder:text-[#a39f97] focus:outline-none focus:border-[#9d731e] transition-colors"
+                role="combobox"
+                aria-expanded={showDropdown}
+                aria-autocomplete="list"
+                aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
               />
             </div>
             
             {/* Desktop Search Dropdown */}
-            {isSearchOpen && searchQuery.trim() && (
+            {showDropdown && (
               <div 
                 className="absolute top-full left-6 right-6 mt-1 bg-white border border-[#e8e0d0] shadow-xl rounded-sm overflow-hidden z-50"
                 onMouseDown={(e) => e.preventDefault()}
+                role="listbox"
               >
-                {isFetching && !searchResults ? (
-                  <div className="p-4 text-center text-xs font-bold text-[#a39f97] uppercase tracking-widest">
-                    Loading...
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2 p-4">
+                    <Loader2 className="h-3.5 w-3.5 text-[#9d731e] animate-spin" />
+                    <span className="text-[10px] font-bold text-[#a39f97] uppercase tracking-widest">Searching...</span>
                   </div>
                 ) : isError ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
                     Error loading results
                   </div>
-                ) : searchResults && searchResults.items.length === 0 ? (
+                ) : displayResults.length === 0 && !isFetching ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
-                    No product exists with name "{searchQuery}"
+                    No results for "{searchQuery}"
                   </div>
-                ) : searchResults ? (
+                ) : displayResults.length > 0 ? (
                   <div className="max-h-[60vh] overflow-y-auto">
-                    {searchResults.items.map(product => (
-                      <Link
+                    {displayResults.map((product, index) => (
+                      <button
                         key={product.id}
-                        to={`/product/${product.slug}`}
-                        onClick={() => {
-                          setIsSearchOpen(false);
-                          setSearchQuery('');
-                        }}
-                        className="flex items-center gap-4 p-3 hover:bg-[#fbfaf7] transition-colors border-b border-[#e8e0d0] last:border-0"
+                        id={`suggestion-${index}`}
+                        type="button"
+                        role="option"
+                        aria-selected={index === activeIndex}
+                        onMouseDown={() => handleSelectSuggestion(product.slug)}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        className={`flex w-full items-center gap-4 p-3 text-left transition-colors border-b border-[#e8e0d0] last:border-0 ${
+                          index === activeIndex ? 'bg-[#f5f0e8]' : 'hover:bg-[#fbfaf7]'
+                        }`}
                       >
                         <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
-                           <img src={product.image || product.images?.[0]} className="h-full w-full object-cover" alt="" />
+                           <img src={product.image} className="h-full w-full object-cover" alt="" />
                         </div>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col min-w-0">
                            <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>
-                           <p className="mt-1 text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</p>
+                           <div className="mt-1 flex items-center gap-2">
+                             {product.discount > 0 ? (
+                               <>
+                                 <span className="text-[10px] font-bold text-[#9d731e]">Rs. {product.price - product.discount}</span>
+                                 <span className="text-[9px] font-medium text-[#a39f97] line-through">Rs. {product.price}</span>
+                               </>
+                             ) : (
+                               <span className="text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</span>
+                             )}
+                           </div>
                         </div>
-                      </Link>
+                        <span className="ml-auto text-[9px] font-semibold text-[#a39f97] uppercase tracking-wider shrink-0">{product.categoryName}</span>
+                      </button>
                     ))}
                   </div>
                 ) : null}
@@ -218,48 +303,72 @@ export default function MainLayout() {
       {isSearchOpen && (
         <div className="absolute top-[80px] left-0 right-0 z-40 bg-[#fbfaf7] border-b border-[#e8e0d0] p-4 shadow-md lg:hidden">
            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              {isTyping || isFetching ? (
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9d731e] animate-spin" />
+              ) : (
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
+              )}
               <input
+                ref={mobileSearchInputRef}
                 type="text"
                 autoFocus
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Search products..."
                 className="w-full bg-white border border-[#d8cdbb] h-10 pl-10 pr-4 text-[11px] font-black uppercase tracking-[0.1em] text-[#111827] placeholder:text-[#a39f97] focus:outline-none focus:border-[#9d731e]"
+                role="combobox"
+                aria-expanded={hasQuery}
+                aria-autocomplete="list"
               />
            </div>
-           {searchQuery.trim() && (
+           {hasQuery && (
               <div 
                 className="mt-2 bg-white border border-[#e8e0d0] shadow-sm max-h-[60vh] overflow-y-auto"
                 onMouseDown={(e) => e.preventDefault()}
+                role="listbox"
               >
-                {isFetching && !searchResults ? (
-                  <div className="p-4 text-center text-xs font-bold text-[#a39f97] uppercase tracking-widest">Loading...</div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2 p-4">
+                    <Loader2 className="h-3.5 w-3.5 text-[#9d731e] animate-spin" />
+                    <span className="text-[10px] font-bold text-[#a39f97] uppercase tracking-widest">Searching...</span>
+                  </div>
                 ) : isError ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">Error</div>
-                ) : searchResults && searchResults.items.length === 0 ? (
+                ) : displayResults.length === 0 && !isFetching ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
-                    No product exists with name "{searchQuery}"
+                    No results for "{searchQuery}"
                   </div>
-                ) : searchResults ? (
-                  searchResults.items.map(product => (
-                      <Link
+                ) : displayResults.length > 0 ? (
+                  displayResults.map((product, index) => (
+                      <button
                         key={product.id}
-                        to={`/product/${product.slug}`}
-                        onClick={() => {
-                          setIsSearchOpen(false);
-                          setSearchQuery('');
-                        }}
-                        className="flex items-center gap-4 p-3 hover:bg-[#fbfaf7] transition-colors border-b border-[#e8e0d0] last:border-0"
+                        type="button"
+                        role="option"
+                        aria-selected={index === activeIndex}
+                        onMouseDown={() => handleSelectSuggestion(product.slug)}
+                        className={`flex w-full items-center gap-4 p-3 text-left transition-colors border-b border-[#e8e0d0] last:border-0 ${
+                          index === activeIndex ? 'bg-[#f5f0e8]' : 'hover:bg-[#fbfaf7]'
+                        }`}
                       >
                         <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
-                           <img src={product.image || product.images?.[0]} className="h-full w-full object-cover" alt="" />
+                           <img src={product.image} className="h-full w-full object-cover" alt="" />
                         </div>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col min-w-0">
                            <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>
-                           <p className="mt-1 text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</p>
+                           <div className="mt-1 flex items-center gap-2">
+                             {product.discount > 0 ? (
+                               <>
+                                 <span className="text-[10px] font-bold text-[#9d731e]">Rs. {product.price - product.discount}</span>
+                                 <span className="text-[9px] font-medium text-[#a39f97] line-through">Rs. {product.price}</span>
+                               </>
+                             ) : (
+                               <span className="text-[10px] font-bold text-[#6f6659]">Rs. {product.price}</span>
+                             )}
+                           </div>
                         </div>
-                      </Link>
+                        <span className="ml-auto text-[9px] font-semibold text-[#a39f97] uppercase tracking-wider shrink-0">{product.categoryName}</span>
+                      </button>
                   ))
                 ) : null}
               </div>

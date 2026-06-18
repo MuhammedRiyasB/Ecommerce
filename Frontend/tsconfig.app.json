@@ -4,6 +4,7 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
+    "ignoreDeprecations": "6.0",
     "types": ["vite/client", "vitest/globals"],
     "skipLibCheck": true,
 
@@ -20,7 +21,6 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

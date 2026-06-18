@@ -41,7 +41,14 @@ builder.Services.AddFluentValidationAutoValidation()
 builder.Services.AddMemoryCache(); // Keep for internal ASP.NET features
 
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-if (string.IsNullOrWhiteSpace(redisConnectionString))
+
+// Detect placeholder values that should not be used as actual connection strings.
+// In local dev, appsettings.json contains "SET_VIA_USER_SECRETS_OR_ENV_VAR" as a placeholder.
+// StackExchange.Redis would hang for ~5s per operation trying to connect to this invalid host.
+var isRedisConfigured = !string.IsNullOrWhiteSpace(redisConnectionString)
+    && !redisConnectionString.StartsWith("SET_VIA", StringComparison.OrdinalIgnoreCase);
+
+if (!isRedisConfigured)
 {
     // Fallback to in-memory IDistributedCache for local dev without Redis
     builder.Services.AddDistributedMemoryCache();

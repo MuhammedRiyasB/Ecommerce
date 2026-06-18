@@ -81,7 +81,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
         <div className="border-x border-b border-[#eee6da] px-4 py-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#9d731e]">Urbaniq Atelier</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#9d731e]">Urbaniq</p>
             {product.color && <span className="text-[11px] font-semibold text-[#7c7467]">{product.color}</span>}
           </div>
           <h3 className="mt-2 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[#111827] transition-colors group-hover:text-[#9d731e]">

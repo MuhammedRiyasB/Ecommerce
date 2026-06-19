@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Heart, Menu, Search, ShoppingBag, User, X, Loader2 } from 'lucide-react';
+import { Heart, Menu, Search, ShoppingBag, User, X } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCartCount } from '../features/cart/cartSlice';
 import { selectCurrentUser, selectIsAuthenticated, logout } from '../features/auth/authSlice';
@@ -8,7 +8,7 @@ import AuthModal from '../features/auth/AuthModal';
 import VerifyEmailPromptModal from '../features/auth/VerifyEmailPromptModal';
 
 import { useGetMeQuery } from '../features/auth/authApiSlice';
-import { useSearchSuggestionsQuery } from '../features/catalog/catalogApiSlice';
+import { catalogApiSlice, useSearchSuggestionsQuery } from '../features/catalog/catalogApiSlice';
 import type { SearchSuggestion } from '../features/catalog/catalogApiSlice';
 import { useDebounce } from '../hooks/useDebounce';
 
@@ -18,6 +18,16 @@ const navItems = [
   { label: 'Occasionwear', href: '/catalog?categorySlug=occasionwear' },
   { label: 'Sale', href: '/catalog?isSale=true' },
 ];
+
+const MIN_SEARCH_QUERY_LENGTH = 2;
+
+const buildCloudinarySuggestionImage = (imageUrl: string) => {
+  if (!imageUrl.includes('/image/upload/')) {
+    return imageUrl;
+  }
+
+  return imageUrl.replace('/image/upload/', '/image/upload/f_auto,q_auto:eco,c_fill,g_auto,w_96,h_120/');
+};
 
 export default function MainLayout() {
   const cartCount = useSelector(selectCartCount);
@@ -37,28 +47,41 @@ export default function MainLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [lastSuggestions, setLastSuggestions] = useState<SearchSuggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const prefetchProduct = catalogApiSlice.usePrefetch('getProductBySlug');
 
-  // Debounce search input — API only fires after user pauses typing for 300ms
-  const debouncedQuery = useDebounce(searchQuery.trim(), 300);
-  const isTyping = searchQuery.trim() !== '' && debouncedQuery !== searchQuery.trim();
+  // Fast debounce with a minimum query length keeps search responsive without firing on every key.
+  const trimmedSearchQuery = searchQuery.trim();
+  const debouncedQuery = useDebounce(trimmedSearchQuery, 180);
+  const canSearch = debouncedQuery.length >= MIN_SEARCH_QUERY_LENGTH;
 
   const { data: suggestions, isFetching, isError } = useSearchSuggestionsQuery(
     { query: debouncedQuery, limit: 6 },
     {
-      skip: !debouncedQuery,
-      // Refetch on arg change but keep previous data visible while loading
+      skip: !canSearch,
+      // Cached suggestions stay reusable while the next query is fetched.
       refetchOnMountOrArgChange: false,
     }
   );
 
-  // Determine what to display: show previous results while new ones load
-  const displayResults: SearchSuggestion[] = suggestions ?? [];
-  const hasQuery = searchQuery.trim().length > 0;
+  // Keep previous results visible while the next query is in flight to avoid a loading flash.
+  useEffect(() => {
+    if (suggestions) {
+      setLastSuggestions(suggestions);
+    }
+  }, [suggestions]);
+
+  const displayResults: SearchSuggestion[] = suggestions ?? (canSearch ? lastSuggestions : []);
+  const hasQuery = trimmedSearchQuery.length > 0;
   const showDropdown = isSearchOpen && hasQuery;
-  const isLoading = (isTyping || isFetching) && displayResults.length === 0;
+  const shouldShowNoResults = canSearch && !isFetching && displayResults.length === 0;
+
+  const prefetchProductDetail = useCallback((slug: string) => {
+    prefetchProduct(slug, { ifOlderThan: 60 });
+  }, [prefetchProduct]);
 
   // Navigate to a selected product suggestion and close the dropdown
   const handleSelectSuggestion = useCallback((slug: string) => {
@@ -165,11 +188,7 @@ export default function MainLayout() {
           {/* Desktop Search */}
           <div className="hidden flex-1 max-w-sm px-6 lg:block relative z-50">
             <div className="relative">
-              {isTyping || isFetching ? (
-                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9d731e] animate-spin" />
-              ) : (
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
-              )}
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -197,16 +216,11 @@ export default function MainLayout() {
                 onMouseDown={(e) => e.preventDefault()}
                 role="listbox"
               >
-                {isLoading ? (
-                  <div className="flex items-center justify-center gap-2 p-4">
-                    <Loader2 className="h-3.5 w-3.5 text-[#9d731e] animate-spin" />
-                    <span className="text-[10px] font-bold text-[#a39f97] uppercase tracking-widest">Searching...</span>
-                  </div>
-                ) : isError ? (
+                {isError ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
                     Error loading results
                   </div>
-                ) : displayResults.length === 0 && !isFetching ? (
+                ) : shouldShowNoResults ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
                     No results for "{searchQuery}"
                   </div>
@@ -221,12 +235,14 @@ export default function MainLayout() {
                         aria-selected={index === activeIndex}
                         onMouseDown={() => handleSelectSuggestion(product.slug)}
                         onMouseEnter={() => setActiveIndex(index)}
+                        onPointerEnter={() => prefetchProductDetail(product.slug)}
+                        onFocus={() => prefetchProductDetail(product.slug)}
                         className={`flex w-full items-center gap-4 p-3 text-left transition-colors border-b border-[#e8e0d0] last:border-0 ${
                           index === activeIndex ? 'bg-[#f5f0e8]' : 'hover:bg-[#fbfaf7]'
                         }`}
                       >
                         <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
-                           <img src={product.image} className="h-full w-full object-cover" alt="" />
+                           <img src={buildCloudinarySuggestionImage(product.image)} loading="lazy" decoding="async" className="h-full w-full object-cover" alt="" />
                         </div>
                         <div className="flex flex-col min-w-0">
                            <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>
@@ -303,11 +319,7 @@ export default function MainLayout() {
       {isSearchOpen && (
         <div className="absolute top-[80px] left-0 right-0 z-40 bg-[#fbfaf7] border-b border-[#e8e0d0] p-4 shadow-md lg:hidden">
            <div className="relative">
-              {isTyping || isFetching ? (
-                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9d731e] animate-spin" />
-              ) : (
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
-              )}
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#a39f97]" />
               <input
                 ref={mobileSearchInputRef}
                 type="text"
@@ -328,14 +340,9 @@ export default function MainLayout() {
                 onMouseDown={(e) => e.preventDefault()}
                 role="listbox"
               >
-                {isLoading ? (
-                  <div className="flex items-center justify-center gap-2 p-4">
-                    <Loader2 className="h-3.5 w-3.5 text-[#9d731e] animate-spin" />
-                    <span className="text-[10px] font-bold text-[#a39f97] uppercase tracking-widest">Searching...</span>
-                  </div>
-                ) : isError ? (
+                {isError ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">Error</div>
-                ) : displayResults.length === 0 && !isFetching ? (
+                ) : shouldShowNoResults ? (
                   <div className="p-4 text-center text-xs font-bold text-[#111827] uppercase tracking-widest">
                     No results for "{searchQuery}"
                   </div>
@@ -347,12 +354,14 @@ export default function MainLayout() {
                         role="option"
                         aria-selected={index === activeIndex}
                         onMouseDown={() => handleSelectSuggestion(product.slug)}
+                        onPointerEnter={() => prefetchProductDetail(product.slug)}
+                        onFocus={() => prefetchProductDetail(product.slug)}
                         className={`flex w-full items-center gap-4 p-3 text-left transition-colors border-b border-[#e8e0d0] last:border-0 ${
                           index === activeIndex ? 'bg-[#f5f0e8]' : 'hover:bg-[#fbfaf7]'
                         }`}
                       >
                         <div className="h-12 w-10 shrink-0 bg-[#efe7da] overflow-hidden">
-                           <img src={product.image} className="h-full w-full object-cover" alt="" />
+                           <img src={buildCloudinarySuggestionImage(product.image)} loading="lazy" decoding="async" className="h-full w-full object-cover" alt="" />
                         </div>
                         <div className="flex flex-col min-w-0">
                            <p className="text-xs font-bold text-[#111827] line-clamp-1">{product.productName}</p>

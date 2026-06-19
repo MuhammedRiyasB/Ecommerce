@@ -159,6 +159,16 @@ namespace Ecommerce.Api.Controllers.Catalog
         }
 
         /// <summary>
+        /// Returns compact product card data for fast homepage rails.
+        /// </summary>
+        [HttpGet("HomeCards")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetHomeProductCards([FromQuery] int count = 200)
+        {
+            return Ok(await _productService.GetHomeProductCardsAsync(count));
+        }
+
+        /// <summary>
         /// Returns lightweight search suggestions for the storefront autocomplete dropdown.
         /// Optimized for speed — uses projection queries with no heavy joins.
         /// </summary>

@@ -25,6 +25,8 @@ namespace Ecommerce.Application.Services.Catalog
         private const string PRODUCTS_CACHE_KEY = "products_cache";
         private const string RECENT_PRODUCTS_CACHE_PREFIX = "recent_products_";
         private const string TOP_SELLING_CACHE_PREFIX = "top_selling_";
+        private const string HOME_PRODUCT_CARDS_CACHE_PREFIX = "home_product_cards_";
+        private const string SEARCH_SUGGESTION_INDEX_CACHE_KEY = "search_suggestion_index_v1";
         private const string SUBCATEGORY_CACHE_PREFIX = "subcategory_products_";
 
         // Track active cache keys for efficient invalidation on product mutations
@@ -235,10 +237,6 @@ namespace Ecommerce.Application.Services.Catalog
 
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .Include(p => p.Category)
-                .Include(p => p.SubCategory)
-                .Include(p => p.ProductImages)
-                .Include(p => p.Variants)
                 .AsQueryable();
 
             query = ApplyFilters(query, categoryId, search, minPrice, maxPrice, color, size, categorySlug, isSale);
@@ -254,14 +252,14 @@ namespace Ecommerce.Application.Services.Catalog
                 query = query.OrderByDescending(p => p.CreatedAtUtc);
             }
 
-            var products = await query
+            var products = await ProjectProductSummary(query)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
             var result = new PagedResult<ProductResponseDto>
             {
-                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                Items = products,
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
@@ -298,10 +296,6 @@ namespace Ecommerce.Application.Services.Catalog
 
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .Include(p => p.Category)
-                .Include(p => p.SubCategory)
-                .Include(p => p.ProductImages)
-                .Include(p => p.Variants)
                 .AsQueryable();
 
             // Apply optional price filters on effective price (Price - Discount)
@@ -312,15 +306,16 @@ namespace Ecommerce.Application.Services.Catalog
                 query = query.Where(p => (p.Price - p.Discount) <= maxPrice.Value);
 
             var totalCount = await query.CountAsync();
-            var products = await query
-                .OrderByDescending(p => p.CreatedAtUtc)
+            query = query.OrderByDescending(p => p.CreatedAtUtc);
+
+            var products = await ProjectProductSummary(query)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
             var result = new PagedResult<ProductResponseDto>
             {
-                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                Items = products,
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
@@ -347,37 +342,60 @@ namespace Ecommerce.Application.Services.Catalog
                 return cachedResult;
             }
 
-            // Aggregate total sold quantity per product from order items
-            var topProductIds = await _orderItemRepo.Query()
+            var result = await ProjectProductSummary(_productRepo.Query()
                 .AsNoTracking()
-                .GroupBy(oi => oi.ProductId)
-                .Select(g => new { ProductId = g.Key, TotalSold = g.Sum(oi => oi.Quantity) })
-                .OrderByDescending(x => x.TotalSold)
+                .Where(p => p.TotalSold > 0)
+                .OrderByDescending(p => p.TotalSold)
+                .ThenByDescending(p => p.CreatedAtUtc))
                 .Take(count)
-                .Select(x => x.ProductId)
                 .ToListAsync();
 
-            if (topProductIds.Count == 0)
-                return new List<ProductResponseDto>();
+            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
+        }
+
+        /// <summary>
+        /// Returns compact product card data for the homepage.
+        /// This avoids sending full product detail fields for every card.
+        /// </summary>
+        public async Task<List<HomeProductCardDto>> GetHomeProductCardsAsync(int count = 200)
+        {
+            count = Math.Clamp(count, 1, 500);
+
+            var cacheKey = $"{HOME_PRODUCT_CARDS_CACHE_PREFIX}c{count}";
+            TrackCacheKey(cacheKey);
+
+            var cachedResult = await _cache.GetRecordAsync<List<HomeProductCardDto>>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
 
             var products = await _productRepo.Query()
                 .AsNoTracking()
-                .Include(p => p.Category)
-                .Include(p => p.SubCategory)
-                .Include(p => p.ProductImages)
-                .Include(p => p.Variants)
-                .Where(p => topProductIds.Contains(p.Id))
+                .OrderByDescending(p => p.CreatedAtUtc)
+                .Take(count)
+                .Select(p => new HomeProductCardDto
+                {
+                    Id = p.Id,
+                    ProductName = p.ProductName,
+                    Slug = p.Slug,
+                    Quantity = p.Quantity,
+                    Price = p.Price,
+                    Discount = p.Discount,
+                    Image = p.ProductImages
+                        .OrderBy(pi => pi.DisplayOrder)
+                        .Select(pi => pi.ImageUrl)
+                        .FirstOrDefault() ?? p.Image,
+                    Color = p.Color,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category.CategoryName,
+                    SubCategoryName = p.SubCategory != null ? p.SubCategory.CategoryName : null
+                })
                 .ToListAsync();
 
-            // Preserve the top-selling order
-            var ordered = topProductIds
-                .Select(id => products.FirstOrDefault(p => p.Id == id))
-                .Where(p => p != null)
-                .ToList();
-
-            var result = _mapper.Map<List<ProductResponseDto>>(ordered);
-            await _cache.SetRecordAsync(cacheKey, result, TimeSpan.FromMinutes(5));
-            return result;
+            await _cache.SetRecordAsync(cacheKey, products, TimeSpan.FromMinutes(5));
+            return products;
         }
 
         /// <summary>
@@ -399,22 +417,19 @@ namespace Ecommerce.Application.Services.Catalog
 
             var query = _productRepo.Query()
                 .AsNoTracking()
-                .Include(p => p.Category)
-                .Include(p => p.SubCategory)
-                .Include(p => p.ProductImages)
-                .Include(p => p.Variants)
                 .Where(p => p.SubCategoryId == subCategoryId);
 
             var totalCount = await query.CountAsync();
-            var products = await query
-                .OrderByDescending(p => p.CreatedAtUtc)
+            query = query.OrderByDescending(p => p.CreatedAtUtc);
+
+            var products = await ProjectProductSummary(query)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
             var result = new PagedResult<ProductResponseDto>
             {
-                Items = _mapper.Map<List<ProductResponseDto>>(products),
+                Items = products,
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
@@ -425,54 +440,168 @@ namespace Ecommerce.Application.Services.Catalog
         }
 
         /// <summary>
-        /// Lightweight search suggestions optimized for the autocomplete dropdown.
+        /// Returns fast search suggestions from a compact Redis-backed product index.
         /// Uses EF Core projection (.Select) to avoid Include joins entirely —
-        /// only the columns needed for the dropdown are fetched from the database.
-        /// Results are cached in Redis for 30 seconds per search term.
+        /// Each typed prefix is ranked in memory instead of scanning SQL Server.
         /// </summary>
         public async Task<List<SearchSuggestionDto>> SearchSuggestionsAsync(string query, int limit = 6)
         {
             if (string.IsNullOrWhiteSpace(query))
                 return new List<SearchSuggestionDto>();
 
-            // Clamp limit to prevent abuse via query string manipulation
             limit = Math.Clamp(limit, 1, 20);
 
-            var searchTerm = query.Trim().ToLower();
-            var cacheKey = $"search_suggest_{searchTerm}_{limit}";
-            TrackCacheKey(cacheKey);
+            var searchTerm = NormalizeSearchTerm(query);
+            if (searchTerm.Length < 2)
+                return new List<SearchSuggestionDto>();
+            var index = await GetSearchSuggestionIndexAsync();
 
-            // Check Redis cache first — 30s TTL keeps suggestions fresh while reducing DB load
-            var cachedResult = await _cache.GetRecordAsync<List<SearchSuggestionDto>>(cacheKey);
-            if (cachedResult != null)
-                return cachedResult;
-
-            // Projection-only query: no Include joins, no navigation property loading
-            // EF Core translates this to a simple SELECT with a single JOIN to Category
-            var suggestions = await _productRepo.Query()
-                .AsNoTracking()
-                .Where(p =>
-                    p.ProductName.ToLower().Contains(searchTerm) ||
-                    p.Category.CategoryName.ToLower().Contains(searchTerm) ||
-                    (p.SubCategory != null && p.SubCategory.CategoryName.ToLower().Contains(searchTerm)))
-                .OrderByDescending(p => p.ProductName.ToLower().StartsWith(searchTerm) ? 1 : 0)
-                .ThenByDescending(p => p.TotalSold)
+            return index
+                .Select(item => new
+                {
+                    Item = item,
+                    Rank = GetSearchRank(item, searchTerm)
+                })
+                .Where(result => result.Rank > 0)
+                .OrderByDescending(result => result.Rank)
+                .ThenByDescending(result => result.Item.TotalSold)
+                .ThenBy(result => result.Item.ProductName)
                 .Take(limit)
-                .Select(p => new SearchSuggestionDto
+                .Select(result => new SearchSuggestionDto
+                {
+                    Id = result.Item.Id,
+                    ProductName = result.Item.ProductName,
+                    Slug = result.Item.Slug,
+                    Image = result.Item.Image,
+                    Price = result.Item.Price,
+                    Discount = result.Item.Discount,
+                    CategoryName = result.Item.CategoryName
+                })
+                .ToList();
+            // Short cache TTL (30s) — search suggestions should be fresh but avoid repeated DB hits
+        }
+
+        private async Task<List<SearchSuggestionIndexItem>> GetSearchSuggestionIndexAsync()
+        {
+            TrackCacheKey(SEARCH_SUGGESTION_INDEX_CACHE_KEY);
+
+            var cachedIndex = await _cache.GetRecordAsync<List<SearchSuggestionIndexItem>>(SEARCH_SUGGESTION_INDEX_CACHE_KEY);
+            if (cachedIndex != null)
+            {
+                return cachedIndex;
+            }
+
+            var index = await _productRepo.Query()
+                .AsNoTracking()
+                .OrderByDescending(p => p.TotalSold)
+                .ThenByDescending(p => p.CreatedAtUtc)
+                .Select(p => new SearchSuggestionIndexItem
                 {
                     Id = p.Id,
                     ProductName = p.ProductName,
                     Slug = p.Slug,
-                    Image = p.Image,
+                    Image = p.ProductImages
+                        .OrderBy(pi => pi.DisplayOrder)
+                        .Select(pi => pi.ImageUrl)
+                        .FirstOrDefault() ?? p.Image,
                     Price = p.Price,
                     Discount = p.Discount,
-                    CategoryName = p.Category.CategoryName
+                    CategoryName = p.Category.CategoryName,
+                    SubCategoryName = p.SubCategory != null ? p.SubCategory.CategoryName : null,
+                    TotalSold = p.TotalSold
                 })
                 .ToListAsync();
 
-            // Short cache TTL (30s) — search suggestions should be fresh but avoid repeated DB hits
-            await _cache.SetRecordAsync(cacheKey, suggestions, TimeSpan.FromSeconds(30));
-            return suggestions;
+            foreach (var item in index)
+            {
+                item.ProductNameSearch = NormalizeSearchTerm(item.ProductName);
+                item.CategoryNameSearch = NormalizeSearchTerm(item.CategoryName);
+                item.SubCategoryNameSearch = NormalizeSearchTerm(item.SubCategoryName);
+            }
+
+            await _cache.SetRecordAsync(SEARCH_SUGGESTION_INDEX_CACHE_KEY, index, TimeSpan.FromMinutes(10));
+            return index;
+        }
+
+        private static int GetSearchRank(SearchSuggestionIndexItem item, string searchTerm)
+        {
+            if (item.ProductNameSearch.StartsWith(searchTerm, StringComparison.Ordinal))
+                return 100;
+
+            if (item.ProductNameSearch.Contains($" {searchTerm}", StringComparison.Ordinal))
+                return 80;
+
+            if (item.ProductNameSearch.Contains(searchTerm, StringComparison.Ordinal))
+                return 60;
+
+            if (item.CategoryNameSearch.StartsWith(searchTerm, StringComparison.Ordinal) ||
+                item.SubCategoryNameSearch.StartsWith(searchTerm, StringComparison.Ordinal))
+                return 40;
+
+            if (item.CategoryNameSearch.Contains(searchTerm, StringComparison.Ordinal) ||
+                item.SubCategoryNameSearch.Contains(searchTerm, StringComparison.Ordinal))
+                return 20;
+
+            return 0;
+        }
+
+        private static string NormalizeSearchTerm(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : Regex.Replace(value.Trim().ToLowerInvariant(), @"\s+", " ");
+        }
+
+        private sealed class SearchSuggestionIndexItem
+        {
+            public Guid Id { get; set; }
+            public string ProductName { get; set; } = null!;
+            public string Slug { get; set; } = null!;
+            public string Image { get; set; } = null!;
+            public decimal Price { get; set; }
+            public decimal Discount { get; set; }
+            public string CategoryName { get; set; } = null!;
+            public string? SubCategoryName { get; set; }
+            public int TotalSold { get; set; }
+            public string ProductNameSearch { get; set; } = string.Empty;
+            public string CategoryNameSearch { get; set; } = string.Empty;
+            public string SubCategoryNameSearch { get; set; } = string.Empty;
+        }
+
+        /// <summary>
+        /// Projects product listing data directly in SQL instead of loading full entity graphs.
+        /// Product detail endpoints still use the full mapper because they need variants,
+        /// delivery rules, and color-specific image groupings.
+        /// </summary>
+        private static IQueryable<ProductResponseDto> ProjectProductSummary(IQueryable<Product> query)
+        {
+            return query.Select(p => new ProductResponseDto
+            {
+                Id = p.Id,
+                ProductName = p.ProductName,
+                SKU = p.SKU,
+                Slug = p.Slug,
+                Quantity = p.Quantity,
+                Price = p.Price,
+                Discount = p.Discount,
+                Description = p.Description,
+                Image = p.ProductImages
+                    .OrderBy(pi => pi.DisplayOrder)
+                    .Select(pi => pi.ImageUrl)
+                    .FirstOrDefault() ?? p.Image,
+                Images = p.ProductImages
+                    .Where(pi => pi.Color == null || pi.Color == string.Empty)
+                    .OrderBy(pi => pi.DisplayOrder)
+                    .Select(pi => pi.ImageUrl)
+                    .ToList(),
+                Size = p.Size,
+                Color = p.Color,
+                Material = p.Material,
+                CategoryId = p.CategoryId,
+                CategoryName = p.Category.CategoryName,
+                SubCategoryId = p.SubCategoryId,
+                SubCategoryName = p.SubCategory != null ? p.SubCategory.CategoryName : null
+            });
         }
 
         /// <summary>

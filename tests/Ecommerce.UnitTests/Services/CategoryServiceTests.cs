@@ -4,6 +4,9 @@ using Ecommerce.Application.Services.Catalog;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Interfaces;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using MockQueryable.Moq;
 using Moq;
 
@@ -29,7 +32,8 @@ public class CategoryServiceTests
         _sut = new CategoryService(
             _categoryRepoMock.Object,
             _unitOfWorkMock.Object,
-            _mapperMock.Object);
+            _mapperMock.Object,
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
     }
 
     // ==================== CreateCategory Tests ====================

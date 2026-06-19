@@ -73,6 +73,20 @@ export interface SearchSuggestion {
   categoryName: string;
 }
 
+export interface HomeProductCard {
+  id: string;
+  productName: string;
+  slug: string;
+  quantity: number;
+  price: number;
+  discount: number;
+  image: string;
+  color?: string | null;
+  categoryId: number;
+  categoryName?: string;
+  subCategoryName?: string;
+}
+
 export interface ProductParams {
   pageNumber?: number;
   pageSize?: number;
@@ -167,6 +181,15 @@ export const catalogApiSlice = apiSlice.injectEndpoints({
       providesTags: [{ type: 'Product', id: 'LIST' }],
     }),
 
+    getHomeProductCards: builder.query<HomeProductCard[], number | void>({
+      query: (count = 200) => ({
+        url: '/Product/HomeCards',
+        params: { count },
+      }),
+      keepUnusedDataFor: 120,
+      providesTags: [{ type: 'Product', id: 'LIST' }],
+    }),
+
     getProductsBySubCategory: builder.query<PaginatedResponse<Product>, { subCategoryId: number; pageNumber?: number; pageSize?: number }>({
       query: ({ subCategoryId, ...params }) => ({
         url: `/Product/subcategory/${subCategoryId}`,
@@ -199,6 +222,7 @@ export const {
   useDeleteProductMutation,
   useGetRecentProductsQuery,
   useGetTopSellingProductsQuery,
+  useGetHomeProductCardsQuery,
   useGetProductsBySubCategoryQuery,
   useSearchSuggestionsQuery,
 } = catalogApiSlice;

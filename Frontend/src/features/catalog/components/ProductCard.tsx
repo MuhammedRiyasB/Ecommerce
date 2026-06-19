@@ -2,12 +2,23 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
-import type { Product } from '../catalogApiSlice';
 import WishlistHeartButton from '@/features/wishlist/WishlistHeartButton';
 import { toast } from 'react-toastify';
+import { catalogApiSlice } from '../catalogApiSlice';
+
+export interface ProductCardProduct {
+  id: string;
+  productName: string;
+  slug: string;
+  quantity: number;
+  price: number;
+  discount: number;
+  image: string;
+  color?: string | null;
+}
 
 interface ProductCardProps {
-  product: Product;
+  product: ProductCardProduct;
 }
 
 const formatPrice = (value: number) =>
@@ -17,10 +28,25 @@ const formatPrice = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+const buildCloudinaryCardImage = (imageUrl: string, width: number) => {
+  if (!imageUrl.includes('/image/upload/')) {
+    return imageUrl;
+  }
+
+  const transformation = `f_auto,q_auto:eco,c_fill,g_auto,w_${width},h_${Math.round(width * 4 / 3)}`;
+  return imageUrl.replace('/image/upload/', `/image/upload/${transformation}/`);
+};
+
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const navigate = useNavigate();
+  const prefetchProduct = catalogApiSlice.usePrefetch('getProductBySlug');
   const discountPercent = product.price > 0 ? Math.round((product.discount / product.price) * 100) : 0;
   const effectivePrice = product.price - product.discount;
+  const cardImage = buildCloudinaryCardImage(product.image, 420);
+
+  const prefetchProductDetail = () => {
+    prefetchProduct(product.slug, { ifOlderThan: 60 });
+  };
 
   const handleAddToCart = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -39,11 +65,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       transition={{ duration: 0.25 }}
       className="group bg-white"
     >
-      <Link to={`/product/${product.slug}`} className="block">
+      <Link
+        to={`/product/${product.slug}`}
+        onFocus={prefetchProductDetail}
+        onPointerEnter={prefetchProductDetail}
+        onTouchStart={prefetchProductDetail}
+        className="block"
+      >
         <div className="relative aspect-[3/4] overflow-hidden bg-[#efe7da]">
           <img
-            src={product.image}
+            src={cardImage}
+            srcSet={`${buildCloudinaryCardImage(product.image, 320)} 320w, ${cardImage} 420w, ${buildCloudinaryCardImage(product.image, 640)} 640w`}
+            sizes="(min-width: 640px) 300px, 260px"
             alt={product.productName}
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
           />
 

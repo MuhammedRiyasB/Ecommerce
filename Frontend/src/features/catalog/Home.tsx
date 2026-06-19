@@ -3,10 +3,11 @@ import { ArrowRight, ChevronLeft, ChevronRight, Sparkles, Tag } from 'lucide-rea
 import { Link } from 'react-router-dom';
 import {
   useGetCategoriesQuery,
-  useGetProductsQuery,
+  useGetHomeProductCardsQuery,
   useGetRecentProductsQuery,
   useGetTopSellingProductsQuery,
   type Category,
+  type HomeProductCard,
   type Product,
 } from './catalogApiSlice';
 import ProductCard from './components/ProductCard';
@@ -28,6 +29,8 @@ type PromoCard = {
   tone: string;
 };
 
+type HomeDisplayProduct = Product | HomeProductCard;
+
 const flattenCategories = (categories: Category[] = []): Category[] =>
   categories.flatMap((category) => [category, ...flattenCategories(category.subCategories || [])]);
 
@@ -35,7 +38,9 @@ const normalize = (value?: string) => value?.toLowerCase().trim() || '';
 
 const buildCatalogHref = (category?: Category) => (category ? `/catalog?categoryId=${category.categoryId}` : '/catalog');
 
-const getProductImage = (product?: Product) => product?.image || product?.images?.[0];
+const getProductImage = (product?: { image?: string; images?: string[] }) => product?.image || product?.images?.[0];
+const getProductDescription = (product: HomeDisplayProduct) => ('description' in product ? product.description : undefined);
+const HOME_PRODUCT_CARD_COUNT = 200;
 
 const scrollRail = (railId: string, direction: 'left' | 'right') => {
   const rail = document.getElementById(railId);
@@ -47,11 +52,21 @@ const Home: React.FC = () => {
 
   const { data: recentProducts, isLoading: isRecentLoading } = useGetRecentProductsQuery({ pageSize: 16 });
   const { data: topSellingProducts, isLoading: isTopSellingLoading } = useGetTopSellingProductsQuery(10);
-  const { data: allProducts, isLoading: isAllProductsLoading } = useGetProductsQuery({ pageNumber: 1, pageSize: 80 });
+  const { data: homeProductCards, isLoading: isHomeCardsLoading } = useGetHomeProductCardsQuery(HOME_PRODUCT_CARD_COUNT);
   const { data: categoryTree } = useGetCategoriesQuery();
 
   const categories = useMemo(() => flattenCategories(categoryTree || []), [categoryTree]);
-  const products = allProducts?.items || recentProducts?.items || [];
+  const featuredProducts = useMemo(
+    () =>
+      [...(recentProducts?.items || []), ...(topSellingProducts || [])].filter(
+        (product, index, source) => source.findIndex((item) => item.id === product.id) === index
+      ),
+    [recentProducts?.items, topSellingProducts]
+  );
+  const products = useMemo(
+    () => homeProductCards || featuredProducts,
+    [homeProductCards, featuredProducts]
+  );
   const saleProducts = useMemo(() => products.filter((product) => product.discount > 0), [products]);
 
   const formalCategory = categories.find((category) => {
@@ -76,11 +91,11 @@ const Home: React.FC = () => {
   }, [products]);
 
   const heroSlides = useMemo<HeroSlide[]>(() => {
-    const featuredProducts = [...(recentProducts?.items || []), ...(topSellingProducts || []), ...products]
+    const slideProducts = [...featuredProducts, ...products]
       .filter((product, index, source) => getProductImage(product) && source.findIndex((item) => item.id === product.id) === index)
       .slice(0, 5);
 
-    if (!featuredProducts.length) {
+    if (!slideProducts.length) {
       return [
         {
           title: 'Formal Shirts',
@@ -109,17 +124,17 @@ const Home: React.FC = () => {
       ];
     }
 
-    return featuredProducts.map((product, index) => ({
+    return slideProducts.map((product, index) => ({
       title: product.categoryName || product.productName,
       eyebrow: index === 0 ? 'New season edit' : product.subCategoryName || 'Featured collection',
       copy:
-        product.description ||
+        getProductDescription(product) ||
         `Premium ${product.categoryName || 'menswear'} selected from the latest Urbaniq catalog for polished everyday dressing.`,
       image: getProductImage(product)!,
       href: `/product/${product.slug}`,
       cta: index === 0 ? 'Shop now' : 'View product',
     }));
-  }, [products, recentProducts?.items, topSellingProducts]);
+  }, [featuredProducts, products]);
 
   useEffect(() => {
     if (activeSlide >= heroSlides.length) {
@@ -176,7 +191,7 @@ const Home: React.FC = () => {
   }, [categoryImageMap, formalCategory, occasionCategory, products, recentProducts?.items, saleProducts]);
 
   const productsByCategory = useMemo(() => {
-    const grouped = new Map<string, Product[]>();
+    const grouped = new Map<string, HomeDisplayProduct[]>();
 
     products.forEach((product) => {
       const categoryName = product.categoryName || 'Featured Products';
@@ -194,7 +209,7 @@ const Home: React.FC = () => {
   }, [categories, products]);
 
   const currentSlide = heroSlides[activeSlide] || heroSlides[0];
-  const isProductLoading = isRecentLoading || isTopSellingLoading || isAllProductsLoading;
+  const isProductLoading = isRecentLoading || isTopSellingLoading || isHomeCardsLoading;
 
   return (
     <div className="bg-[#fbfaf7]">
@@ -350,7 +365,7 @@ const Home: React.FC = () => {
               </Link>
             </div>
 
-            <ProductRail railId="sale-products" products={saleProducts} isLoading={isAllProductsLoading} emptyText="Sale products will appear here when discounts are active." />
+            <ProductRail railId="sale-products" products={saleProducts} isLoading={isProductLoading} emptyText="Sale products will appear here when discounts are active." />
           </div>
         </section>
       )}
@@ -392,7 +407,7 @@ const Home: React.FC = () => {
   );
 };
 
-const ProductRail: React.FC<{ railId: string; products: Product[]; isLoading: boolean; emptyText: string }> = ({
+const ProductRail: React.FC<{ railId: string; products: HomeDisplayProduct[]; isLoading: boolean; emptyText: string }> = ({
   railId,
   products,
   isLoading,

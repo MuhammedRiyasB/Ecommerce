@@ -73,6 +73,11 @@ namespace Ecommerce.Application.Interfaces.Catalog
         Task<List<ProductResponseDto>> GetTopSellingProductsAsync(int count = 10);
 
         /// <summary>
+        /// Returns lightweight product cards for fast homepage rendering.
+        /// </summary>
+        Task<List<HomeProductCardDto>> GetHomeProductCardsAsync(int count = 200);
+
+        /// <summary>
         /// Returns products filtered by subcategory (leaf category in the hierarchy).
         /// </summary>
         Task<PagedResult<ProductResponseDto>> GetProductsBySubCategoryAsync(

@@ -1,9 +1,11 @@
 using AutoMapper;
 using Ecommerce.Application.DTOs.Category;
+using Ecommerce.Application.Extensions;
 using Ecommerce.Application.Interfaces.Catalog;
 using Ecommerce.Domain.Entities;
 using Ecommerce.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using System.Text.RegularExpressions;
 
 namespace Ecommerce.Application.Services.Catalog
@@ -18,12 +20,15 @@ namespace Ecommerce.Application.Services.Catalog
         private readonly IRepository<Category> _categoryRepo;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly IDistributedCache _cache;
+        private const string CATEGORY_TREE_CACHE_KEY = "category_tree_active";
 
-        public CategoryService(IRepository<Category> categoryRepo, IUnitOfWork unitOfWork, IMapper mapper)
+        public CategoryService(IRepository<Category> categoryRepo, IUnitOfWork unitOfWork, IMapper mapper, IDistributedCache cache)
         {
             _categoryRepo = categoryRepo;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _cache = cache;
         }
 
         /// <inheritdoc />
@@ -61,6 +66,7 @@ namespace Ecommerce.Application.Services.Catalog
 
             await _categoryRepo.AddAsync(category);
             await _unitOfWork.SaveChangesAsync();
+            await InvalidateCategoryCachesAsync();
 
             return "Category added successfully.";
         }
@@ -79,6 +85,12 @@ namespace Ecommerce.Application.Services.Catalog
         /// <inheritdoc />
         public async Task<IEnumerable<CategoryResponseDto>> GetCategoryTreeAsync()
         {
+            var cachedTree = await _cache.GetRecordAsync<List<CategoryResponseDto>>(CATEGORY_TREE_CACHE_KEY);
+            if (cachedTree != null)
+            {
+                return cachedTree;
+            }
+
             // Fetch all categories in a single query (no N+1 problem)
             var allCategories = await _categoryRepo.Query()
                 .AsNoTracking()
@@ -106,6 +118,7 @@ namespace Ecommerce.Application.Services.Catalog
                 }
             }
 
+            await _cache.SetRecordAsync(CATEGORY_TREE_CACHE_KEY, rootCategories, TimeSpan.FromMinutes(10));
             return rootCategories;
         }
 
@@ -156,6 +169,7 @@ namespace Ecommerce.Application.Services.Catalog
 
             category.IsActive = !category.IsActive;
             await _unitOfWork.SaveChangesAsync();
+            await InvalidateCategoryCachesAsync();
 
             return category.IsActive;
         }
@@ -179,6 +193,19 @@ namespace Ecommerce.Application.Services.Catalog
 
             _categoryRepo.Remove(category);
             await _unitOfWork.SaveChangesAsync();
+            await InvalidateCategoryCachesAsync();
+        }
+
+        private async Task InvalidateCategoryCachesAsync()
+        {
+            try
+            {
+                await _cache.RemoveAsync(CATEGORY_TREE_CACHE_KEY);
+            }
+            catch (Exception)
+            {
+                // Category writes should not fail just because Redis is temporarily unavailable.
+            }
         }
     }
 }

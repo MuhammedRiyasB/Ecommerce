@@ -2,13 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, Sparkles, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
-  useGetCategoriesQuery,
   useGetHomeProductCardsQuery,
-  useGetRecentProductsQuery,
-  useGetTopSellingProductsQuery,
-  type Category,
   type HomeProductCard,
-  type Product,
 } from './catalogApiSlice';
 import ProductCard from './components/ProductCard';
 
@@ -29,18 +24,15 @@ type PromoCard = {
   tone: string;
 };
 
-type HomeDisplayProduct = Product | HomeProductCard;
-
-const flattenCategories = (categories: Category[] = []): Category[] =>
-  categories.flatMap((category) => [category, ...flattenCategories(category.subCategories || [])]);
+type HomeDisplayProduct = HomeProductCard;
 
 const normalize = (value?: string) => value?.toLowerCase().trim() || '';
 
-const buildCatalogHref = (category?: Category) => (category ? `/catalog?categoryId=${category.categoryId}` : '/catalog');
+const buildCatalogHref = (categoryId?: number) => (categoryId ? `/catalog?categoryId=${categoryId}` : '/catalog');
 
-const getProductImage = (product?: { image?: string; images?: string[] }) => product?.image || product?.images?.[0];
-const getProductDescription = (product: HomeDisplayProduct) => ('description' in product ? product.description : undefined);
+const getProductImage = (product?: { image?: string }) => product?.image;
 const HOME_PRODUCT_CARD_COUNT = 200;
+const NEW_ARRIVAL_COUNT = 16;
 
 const scrollRail = (railId: string, direction: 'left' | 'right') => {
   const rail = document.getElementById(railId);
@@ -50,32 +42,19 @@ const scrollRail = (railId: string, direction: 'left' | 'right') => {
 const Home: React.FC = () => {
   const [activeSlide, setActiveSlide] = useState(0);
 
-  const { data: recentProducts, isLoading: isRecentLoading } = useGetRecentProductsQuery({ pageSize: 16 });
-  const { data: topSellingProducts, isLoading: isTopSellingLoading } = useGetTopSellingProductsQuery(10);
   const { data: homeProductCards, isLoading: isHomeCardsLoading } = useGetHomeProductCardsQuery(HOME_PRODUCT_CARD_COUNT);
-  const { data: categoryTree } = useGetCategoriesQuery();
 
-  const categories = useMemo(() => flattenCategories(categoryTree || []), [categoryTree]);
-  const featuredProducts = useMemo(
-    () =>
-      [...(recentProducts?.items || []), ...(topSellingProducts || [])].filter(
-        (product, index, source) => source.findIndex((item) => item.id === product.id) === index
-      ),
-    [recentProducts?.items, topSellingProducts]
-  );
-  const products = useMemo(
-    () => homeProductCards || featuredProducts,
-    [homeProductCards, featuredProducts]
-  );
+  const products = useMemo(() => homeProductCards || [], [homeProductCards]);
+  const newArrivalProducts = useMemo(() => products.slice(0, NEW_ARRIVAL_COUNT), [products]);
   const saleProducts = useMemo(() => products.filter((product) => product.discount > 0), [products]);
 
-  const formalCategory = categories.find((category) => {
-    const name = normalize(category.categoryName);
+  const formalCategoryProduct = products.find((product) => {
+    const name = normalize(product.categoryName || product.subCategoryName);
     return name.includes('formal') || name.includes('shirt') || name.includes('trouser') || name.includes('blazer');
   });
 
-  const occasionCategory = categories.find((category) => {
-    const name = normalize(category.categoryName);
+  const occasionCategoryProduct = products.find((product) => {
+    const name = normalize(product.categoryName || product.subCategoryName);
     return name.includes('occasion') || name.includes('wedding') || name.includes('suit') || name.includes('ethnic');
   });
 
@@ -91,7 +70,7 @@ const Home: React.FC = () => {
   }, [products]);
 
   const heroSlides = useMemo<HeroSlide[]>(() => {
-    const slideProducts = [...featuredProducts, ...products]
+    const slideProducts = products
       .filter((product, index, source) => getProductImage(product) && source.findIndex((item) => item.id === product.id) === index)
       .slice(0, 5);
 
@@ -127,14 +106,12 @@ const Home: React.FC = () => {
     return slideProducts.map((product, index) => ({
       title: product.categoryName || product.productName,
       eyebrow: index === 0 ? 'New season edit' : product.subCategoryName || 'Featured collection',
-      copy:
-        getProductDescription(product) ||
-        `Premium ${product.categoryName || 'menswear'} selected from the latest Urbaniq catalog for polished everyday dressing.`,
+      copy: `Premium ${product.categoryName || 'menswear'} selected from the latest Urbaniq catalog for polished everyday dressing.`,
       image: getProductImage(product)!,
       href: `/product/${product.slug}`,
       cta: index === 0 ? 'Shop now' : 'View product',
     }));
-  }, [featuredProducts, products]);
+  }, [products]);
 
   useEffect(() => {
     if (activeSlide >= heroSlides.length) {
@@ -153,9 +130,9 @@ const Home: React.FC = () => {
   }, [heroSlides.length]);
 
   const promoCards = useMemo<PromoCard[]>(() => {
-    const newest = recentProducts?.items?.[0];
-    const formalProduct = products.find((product) => product.categoryId === formalCategory?.categoryId);
-    const occasionProduct = products.find((product) => product.categoryId === occasionCategory?.categoryId);
+    const newest = newArrivalProducts[0];
+    const formalProduct = formalCategoryProduct;
+    const occasionProduct = occasionCategoryProduct;
     const saleProduct = saleProducts[0];
 
     return [
@@ -169,15 +146,15 @@ const Home: React.FC = () => {
       {
         title: 'Formal',
         subtitle: 'Office-ready tailoring and clean weekday essentials',
-        image: getProductImage(formalProduct) || (formalCategory ? categoryImageMap.get(formalCategory.categoryId) : undefined),
-        href: buildCatalogHref(formalCategory),
+        image: getProductImage(formalProduct) || (formalProduct ? categoryImageMap.get(formalProduct.categoryId) : undefined),
+        href: buildCatalogHref(formalProduct?.categoryId),
         tone: 'from-[#1f2937]/10 via-[#1f2937]/15 to-[#111827]/88',
       },
       {
         title: 'Occasional',
         subtitle: 'Sharper pieces for weddings, evenings, and events',
-        image: getProductImage(occasionProduct) || (occasionCategory ? categoryImageMap.get(occasionCategory.categoryId) : undefined),
-        href: buildCatalogHref(occasionCategory),
+        image: getProductImage(occasionProduct) || (occasionProduct ? categoryImageMap.get(occasionProduct.categoryId) : undefined),
+        href: buildCatalogHref(occasionProduct?.categoryId),
         tone: 'from-[#312e24]/10 via-[#312e24]/15 to-[#111827]/88',
       },
       {
@@ -188,7 +165,7 @@ const Home: React.FC = () => {
         tone: 'from-[#3a1f1f]/10 via-[#3a1f1f]/15 to-[#111827]/90',
       },
     ];
-  }, [categoryImageMap, formalCategory, occasionCategory, products, recentProducts?.items, saleProducts]);
+  }, [categoryImageMap, formalCategoryProduct, newArrivalProducts, occasionCategoryProduct, saleProducts]);
 
   const productsByCategory = useMemo(() => {
     const grouped = new Map<string, HomeDisplayProduct[]>();
@@ -203,13 +180,13 @@ const Home: React.FC = () => {
       .map(([categoryName, items]) => ({
         categoryName,
         items,
-        category: categories.find((item) => item.categoryName === categoryName),
+        categoryId: items[0]?.categoryId,
       }))
       .filter((section) => section.items.length > 0);
-  }, [categories, products]);
+  }, [products]);
 
   const currentSlide = heroSlides[activeSlide] || heroSlides[0];
-  const isProductLoading = isRecentLoading || isTopSellingLoading || isHomeCardsLoading;
+  const isProductLoading = isHomeCardsLoading;
 
   return (
     <div className="bg-[#fbfaf7]">
@@ -342,8 +319,8 @@ const Home: React.FC = () => {
 
           <ProductRail
             railId="new-arrivals"
-            products={recentProducts?.items || []}
-            isLoading={isRecentLoading}
+            products={newArrivalProducts}
+            isLoading={isProductLoading}
             emptyText="New arrivals will appear here after products are added."
           />
         </div>
@@ -380,7 +357,7 @@ const Home: React.FC = () => {
                   <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">{section.categoryName}</h2>
                 </div>
                 <Link
-                  to={buildCatalogHref(section.category)}
+                  to={buildCatalogHref(section.categoryId)}
                   className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link"
                 >
                   View all

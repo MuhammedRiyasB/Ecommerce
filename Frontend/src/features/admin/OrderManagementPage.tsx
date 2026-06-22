@@ -101,72 +101,113 @@ const OrderManagementPage = () => {
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#d7b46a] border-t-transparent" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[940px] text-left">
-              <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
-                <tr>
-                  <th className="px-5 py-4">Order</th>
-                  <th className="px-5 py-4">Customer</th>
-                  <th className="px-5 py-4">Total</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4">Update</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eee6da]">
-                {filteredItems.length ? (
-                  filteredItems.map((order) => {
-                    const normalizedStatus = order.orderStatus.toLowerCase();
-                    const StatusIcon = statusIcons[normalizedStatus] || Clock;
-
-                    return (
-                      <tr key={order.orderId} className="transition-colors hover:bg-[#fbfaf7]">
-                        <td className="px-5 py-4">
-                          <Link to={`/admin/orders/${order.orderId}`} className="block hover:opacity-80">
-                            <p className="font-mono text-xs font-bold text-[#111827] hover:underline hover:text-[#9d731e]">{order.transactionId || order.orderId.slice(0, 8)}</p>
-                            <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
-                          </Link>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="text-sm font-bold text-[#111827]">
-                            {order.address?.fullName || 'Customer'}
-                          </p>
-                          <p className="mt-1 text-xs text-[#7c7467]">
-                            {order.userEmail || 'Email unavailable'}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="text-sm font-black text-[#111827]">{formatCurrency(order.totalPrice)}</p>
-                          <p className="mt-1 text-xs text-[#7c7467]">{order.orderItems?.length || 0} items</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-2 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${statusStyles[normalizedStatus] || 'bg-gray-100 text-gray-700'}`}>
-                            <StatusIcon className="h-4 w-4" />
-                            {order.orderStatus}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <select
-                            disabled={isUpdating || normalizedStatus === 'delivered' || normalizedStatus === 'cancelled'}
-                            value={order.orderStatus}
-                            onChange={(event) => handleStatusChange(order.orderId, event.target.value)}
-                            className="h-10 border border-[#d8cdbb] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#9d731e] disabled:opacity-50 disabled:bg-gray-50"
-                          >
-                            {getAvailableStatuses(order.orderStatus).map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
+          <>
+            {/* Desktop table view */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-[#7c7467]">No orders found.</td>
+                    <th className="px-5 py-4">Order</th>
+                    <th className="px-5 py-4">Customer</th>
+                    <th className="px-5 py-4">Total</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Update</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#eee6da]">
+                  {filteredItems.length ? (
+                    filteredItems.map((order) => {
+                      const normalizedStatus = order.orderStatus.toLowerCase();
+                      const StatusIcon = statusIcons[normalizedStatus] || Clock;
+                      return (
+                        <tr key={order.orderId} className="transition-colors hover:bg-[#fbfaf7]">
+                          <td className="px-5 py-4">
+                            <Link to={`/admin/orders/${order.orderId}`} className="block hover:opacity-80">
+                              <p className="font-mono text-xs font-bold text-[#111827] hover:underline hover:text-[#9d731e]">{order.transactionId || order.orderId.slice(0, 8)}</p>
+                              <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
+                            </Link>
+                          </td>
+                          <td className="px-5 py-4">
+                            <p className="text-sm font-bold text-[#111827]">{order.address?.fullName || 'Customer'}</p>
+                            <p className="mt-1 text-xs text-[#7c7467]">{order.userEmail || 'Email unavailable'}</p>
+                          </td>
+                          <td className="px-5 py-4">
+                            <p className="text-sm font-black text-[#111827]">{formatCurrency(order.totalPrice)}</p>
+                            <p className="mt-1 text-xs text-[#7c7467]">{order.orderItems?.length || 0} items</p>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center gap-2 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${statusStyles[normalizedStatus] || 'bg-gray-100 text-gray-700'}`}>
+                              <StatusIcon className="h-4 w-4" />
+                              {order.orderStatus}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <select
+                              disabled={isUpdating || normalizedStatus === 'delivered' || normalizedStatus === 'cancelled'}
+                              value={order.orderStatus}
+                              onChange={(event) => handleStatusChange(order.orderId, event.target.value)}
+                              className="h-10 border border-[#d8cdbb] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#9d731e] disabled:opacity-50 disabled:bg-gray-50"
+                            >
+                              {getAvailableStatuses(order.orderStatus).map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-[#7c7467]">No orders found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card view */}
+            <div className="lg:hidden divide-y divide-[#eee6da]">
+              {filteredItems.length ? (
+                filteredItems.map((order) => {
+                  const normalizedStatus = order.orderStatus.toLowerCase();
+                  const StatusIcon = statusIcons[normalizedStatus] || Clock;
+                  return (
+                    <div key={order.orderId} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <Link to={`/admin/orders/${order.orderId}`} className="min-w-0 flex-1">
+                          <p className="font-mono text-xs font-bold text-[#111827] hover:text-[#9d731e]">{order.transactionId || order.orderId.slice(0, 8)}</p>
+                          <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
+                        </Link>
+                        <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${statusStyles[normalizedStatus] || 'bg-gray-100 text-gray-700'}`}>
+                          <StatusIcon className="h-3.5 w-3.5" />
+                          {order.orderStatus}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-[#111827] truncate">{order.address?.fullName || 'Customer'}</p>
+                          <p className="text-xs text-[#7c7467] truncate">{order.userEmail || 'Email unavailable'}</p>
+                        </div>
+                        <p className="shrink-0 text-sm font-black text-[#111827]">{formatCurrency(order.totalPrice)}</p>
+                      </div>
+                      <select
+                        disabled={isUpdating || normalizedStatus === 'delivered' || normalizedStatus === 'cancelled'}
+                        value={order.orderStatus}
+                        onChange={(event) => handleStatusChange(order.orderId, event.target.value)}
+                        className="w-full h-10 border border-[#d8cdbb] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#9d731e] disabled:opacity-50 disabled:bg-gray-50"
+                      >
+                        {getAvailableStatuses(order.orderStatus).map((status) => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-5 py-10 text-center text-sm text-[#7c7467]">No orders found.</div>
+              )}
+            </div>
+          </>
         )}
 
         {data && data.totalPages > 1 && (

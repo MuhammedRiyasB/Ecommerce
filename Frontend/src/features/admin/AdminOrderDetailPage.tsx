@@ -87,8 +87,9 @@ const AdminOrderDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="space-y-6">
+      <div className="mx-auto max-w-6xl grid gap-6 lg:grid-cols-3">
+        {/* Left Column: Items & Cancellation Info */}
+        <div className="space-y-6 lg:col-span-2">
           {/* Items */}
           <section className="border border-[#e1d5c2] bg-white">
             <div className="border-b border-[#eee6da] bg-[#f3ecdf] px-5 py-4">
@@ -97,15 +98,15 @@ const AdminOrderDetailPage: React.FC = () => {
             <div className="divide-y divide-[#eee6da]">
               {order.orderItems.map((item) => (
                 <div key={item.orderItemId} className="flex gap-4 p-5">
-                  <img src={item.imageUrl} alt={item.productName} className="h-24 w-20 bg-gray-50 object-cover" />
-                  <div className="flex-1">
-                    <h4 className="font-bold text-[#111827]">{item.productName}</h4>
+                  <img src={item.imageUrl} alt={item.productName} className="h-24 w-20 bg-gray-50 object-cover shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-[#111827] truncate">{item.productName}</h4>
                     <p className="mt-1 text-xs text-[#7c7467]">
                       Size: {item.size} • Color: {item.color} • Qty: {item.quantity}
                     </p>
                     <p className="mt-2 text-sm font-black text-[#111827]">{formatCurrency(item.price)}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-sm font-black text-[#111827]">{formatCurrency(item.totalAmount)}</p>
                   </div>
                 </div>
@@ -127,7 +128,7 @@ const AdminOrderDetailPage: React.FC = () => {
           )}
         </div>
 
-        {/* Customer & Status Section */}
+        {/* Right Column: Customer & Status Section */}
         <div className="space-y-6">
           {/* Status Update */}
           <section className="border border-[#e1d5c2] bg-white">

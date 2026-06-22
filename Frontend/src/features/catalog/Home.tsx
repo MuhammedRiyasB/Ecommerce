@@ -21,8 +21,6 @@ type HeroSlide = {
 
 type HomeDisplayProduct = HomeProductCard;
 
-const normalize = (value?: string) => value?.toLowerCase().trim() || '';
-
 const buildCatalogHref = (categoryId?: number) => (categoryId ? `/catalog?categoryId=${categoryId}` : '/catalog');
 
 const getProductImage = (product?: { image?: string }) => product?.image;

@@ -102,65 +102,117 @@ const CategoryManagementPage = () => {
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#d7b46a] border-t-transparent" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left">
-              <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
-                <tr>
-                  <th className="px-5 py-4">Category</th>
-                  <th className="px-5 py-4">Slug</th>
-                  <th className="px-5 py-4">Level</th>
-                  <th className="px-5 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eee6da]">
-                {flattenedCategories.length ? (
-                  flattenedCategories.map((category) => (
-                    <tr key={category.categoryId} className="transition-colors hover:bg-[#fbfaf7]">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-4" style={{ paddingLeft: `${category.depth * 24}px` }}>
-                          {category.depth > 0 && <CornerDownRight className="h-4 w-4 text-[#d8cdbb]" />}
-                          <div className="grid h-10 w-10 shrink-0 place-items-center bg-[#f3ecdf] text-[#9d731e]">
-                            <Tags className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-[#111827]">{category.categoryName}</p>
-                            {category.description && <p className="mt-1 max-w-md truncate text-xs text-[#7c7467]">{category.description}</p>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 font-mono text-xs text-[#514b43]">{category.slug}</td>
-                      <td className="px-5 py-4 text-sm font-semibold text-[#514b43]">
-                        {category.depth === 0 ? 'Root' : `Sub level ${category.depth}`}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                           {category.depth === 0 && (
-                             <button
-                               onClick={() => openModal(category.categoryId)}
-                               className="text-xs font-bold text-[#9d731e] hover:underline"
-                             >
-                               + Sub
-                             </button>
-                           )}
-                           <button 
-                             onClick={() => setCategoryToDelete({ id: category.categoryId, name: category.categoryName })}
-                             title="Delete Category"
-                             className="grid h-8 w-8 place-items-center border border-red-200 text-red-600 hover:bg-red-50"
-                           >
-                              <Trash2 className="h-4 w-4" />
-                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
+          <>
+            {/* Desktop table view */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left">
+                <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#7c7467]">No categories found.</td>
+                    <th className="px-5 py-4">Category</th>
+                    <th className="px-5 py-4">Slug</th>
+                    <th className="px-5 py-4">Level</th>
+                    <th className="px-5 py-4 text-right">Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#eee6da]">
+                  {flattenedCategories.length ? (
+                    flattenedCategories.map((category) => (
+                      <tr key={category.categoryId} className="transition-colors hover:bg-[#fbfaf7]">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-4" style={{ paddingLeft: `${category.depth * 24}px` }}>
+                            {category.depth > 0 && <CornerDownRight className="h-4 w-4 text-[#d8cdbb]" />}
+                            <div className="grid h-10 w-10 shrink-0 place-items-center bg-[#f3ecdf] text-[#9d731e]">
+                              <Tags className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-[#111827]">{category.categoryName}</p>
+                              {category.description && <p className="mt-1 max-w-md truncate text-xs text-[#7c7467]">{category.description}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 font-mono text-xs text-[#514b43]">{category.slug}</td>
+                        <td className="px-5 py-4 text-sm font-semibold text-[#514b43]">
+                          {category.depth === 0 ? 'Root' : `Sub level ${category.depth}`}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-3">
+                             {category.depth === 0 && (
+                               <button
+                                 onClick={() => openModal(category.categoryId)}
+                                 className="text-xs font-bold text-[#9d731e] hover:underline"
+                               >
+                                 + Sub
+                               </button>
+                             )}
+                             <button 
+                               onClick={() => setCategoryToDelete({ id: category.categoryId, name: category.categoryName })}
+                               title="Delete Category"
+                               className="grid h-8 w-8 place-items-center border border-red-200 text-red-600 hover:bg-red-50"
+                             >
+                                <Trash2 className="h-4 w-4" />
+                             </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#7c7467]">No categories found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card view */}
+            <div className="lg:hidden divide-y divide-[#eee6da]">
+              {flattenedCategories.length ? (
+                flattenedCategories.map((category) => (
+                  <div key={category.categoryId} className="p-4 space-y-3" style={{ paddingLeft: `${Math.max(16, category.depth * 16 + 16)}px` }}>
+                    <div className="flex items-center gap-3">
+                      {category.depth > 0 && <CornerDownRight className="h-4 w-4 text-[#d8cdbb] shrink-0" />}
+                      <div className="grid h-10 w-10 shrink-0 place-items-center bg-[#f3ecdf] text-[#9d731e]">
+                        <Tags className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-[#111827] truncate">{category.categoryName}</p>
+                        <p className="font-mono text-[10px] text-[#7c7467] truncate">{category.slug}</p>
+                      </div>
+                    </div>
+                    {category.description && (
+                      <p className="text-xs text-[#7c7467] line-clamp-2" style={{ paddingLeft: category.depth > 0 ? '2.5rem' : '3.5rem' }}>
+                        {category.description}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <span className="text-xs font-semibold text-[#514b43]">
+                        {category.depth === 0 ? 'Root' : `Sub level ${category.depth}`}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        {category.depth === 0 && (
+                          <button
+                            onClick={() => openModal(category.categoryId)}
+                            className="text-[11px] font-black uppercase tracking-[0.14em] text-[#9d731e] hover:underline"
+                          >
+                            + Sub
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setCategoryToDelete({ id: category.categoryId, name: category.categoryName })}
+                          title="Delete Category"
+                          className="grid h-8 w-8 place-items-center border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                           <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-5 py-10 text-center text-sm text-[#7c7467]">No categories found.</div>
+              )}
+            </div>
+          </>
         )}
       </section>
 

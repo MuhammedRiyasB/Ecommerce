@@ -57,72 +57,125 @@ const UserManagementPage = () => {
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#d7b46a] border-t-transparent" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
-              <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
-                <tr>
-                  <th className="px-5 py-4">User</th>
-                  <th className="px-5 py-4">Role</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eee6da]">
-                {filteredUsers.length ? (
-                  filteredUsers.map((user) => (
-                    <tr key={user.userId} className="transition-colors hover:bg-[#fbfaf7]">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-4">
-                          <div className="grid h-11 w-11 place-items-center bg-[#111827] text-sm font-black uppercase text-[#d7b46a]">
-                            {user.name?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
+          <>
+            {/* Desktop table view */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
+                  <tr>
+                    <th className="px-5 py-4">User</th>
+                    <th className="px-5 py-4">Role</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#eee6da]">
+                  {filteredUsers.length ? (
+                    filteredUsers.map((user) => (
+                      <tr key={user.userId} className="transition-colors hover:bg-[#fbfaf7]">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="grid h-11 w-11 place-items-center bg-[#111827] text-sm font-black uppercase text-[#d7b46a]">
+                              {user.name?.charAt(0).toUpperCase() || <UserRound className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-[#111827]">{user.name}</p>
+                              <p className="mt-1 text-xs text-[#7c7467]">{user.email}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-[#111827]">{user.name}</p>
-                            <p className="mt-1 text-xs text-[#7c7467]">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                            user.role === 'Admin' ? 'bg-[#111827] text-[#d7b46a]' : 'bg-[#f3ecdf] text-[#514b43]'
+                          }`}>
+                            {user.role || 'User'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                            user.isBlocked ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {user.isBlocked ? 'Blocked' : 'Active'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          {user.role !== 'Admin' && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBlock(user.userId, user.isBlocked, user.name)}
+                              disabled={isToggling}
+                              className={`inline-flex h-9 items-center justify-center gap-2 border px-4 text-[11px] font-black uppercase tracking-[0.16em] disabled:opacity-50 ${
+                                user.isBlocked
+                                  ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                  : 'border-red-200 text-red-700 hover:bg-red-50'
+                              }`}
+                            >
+                              {user.isBlocked ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                              {user.isBlocked ? 'Unblock' : 'Block'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#7c7467]">No users found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card view */}
+            <div className="lg:hidden divide-y divide-[#eee6da]">
+              {filteredUsers.length ? (
+                filteredUsers.map((user) => (
+                  <div key={user.userId} className="p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="shrink-0 grid h-10 w-10 place-items-center bg-[#111827] text-sm font-black uppercase text-[#d7b46a]">
+                        {user.name?.charAt(0).toUpperCase() || <UserRound className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-[#111827] truncate">{user.name}</p>
+                        <p className="text-xs text-[#7c7467] truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex gap-2">
+                        <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
                           user.role === 'Admin' ? 'bg-[#111827] text-[#d7b46a]' : 'bg-[#f3ecdf] text-[#514b43]'
                         }`}>
                           {user.role || 'User'}
                         </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                        <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
                           user.isBlocked ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
                         }`}>
                           {user.isBlocked ? 'Blocked' : 'Active'}
                         </span>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {user.role !== 'Admin' && (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleBlock(user.userId, user.isBlocked, user.name)}
-                            disabled={isToggling}
-                            className={`inline-flex h-9 items-center justify-center gap-2 border px-4 text-[11px] font-black uppercase tracking-[0.16em] disabled:opacity-50 ${
-                              user.isBlocked
-                                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                                : 'border-red-200 text-red-700 hover:bg-red-50'
-                            }`}
-                          >
-                            {user.isBlocked ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
-                            {user.isBlocked ? 'Unblock' : 'Block'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#7c7467]">No users found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      {user.role !== 'Admin' && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBlock(user.userId, user.isBlocked, user.name)}
+                          disabled={isToggling}
+                          className={`shrink-0 inline-flex h-8 items-center justify-center gap-1.5 border px-3 text-[10px] font-black uppercase tracking-[0.16em] disabled:opacity-50 ${
+                            user.isBlocked
+                              ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                              : 'border-red-200 text-red-700 hover:bg-red-50'
+                          }`}
+                        >
+                          {user.isBlocked ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                          {user.isBlocked ? 'Unblock' : 'Block'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-5 py-10 text-center text-sm text-[#7c7467]">No users found.</div>
+              )}
+            </div>
+          </>
         )}
 
         {data && data.totalCount > 10 && (

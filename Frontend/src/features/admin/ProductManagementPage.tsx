@@ -108,73 +108,128 @@ const ProductManagementPage = () => {
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-[#d7b46a] border-t-transparent" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left">
-              <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
-                <tr>
-                  <th className="px-5 py-4">Product</th>
-                  <th className="px-5 py-4">SKU</th>
-                  <th className="px-5 py-4">Price</th>
-                  <th className="px-5 py-4">Stock</th>
-                  <th className="px-5 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eee6da]">
-                {data?.items?.length ? (
-                  data.items.map((product) => (
-                    <tr key={product.id} className="transition-colors hover:bg-[#fbfaf7]">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-4">
-                          <Link to={`/admin/products/${product.id}`}>
-                            <img
-                              src={product.image}
-                              alt={product.productName}
-                              className="h-16 w-12 object-cover bg-[#efe7da]"
-                              onError={(event) => {
-                                event.currentTarget.src = 'https://placehold.co/96x128?text=No+Image';
-                              }}
-                            />
-                          </Link>
-                          <div className="min-w-0">
-                            <Link to={`/admin/products/${product.id}`} className="block truncate text-sm font-bold text-[#111827] hover:text-[#9d731e] transition-colors">
-                              {product.productName}
-                            </Link>
-                            <p className="mt-1 text-xs text-[#7c7467]">{product.categoryName || 'Uncategorized'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 font-mono text-xs text-[#514b43]">{product.sku}</td>
-                      <td className="px-5 py-4 text-sm font-black text-[#111827]">{formatCurrency(product.price - product.discount)}</td>
-                      <td className="px-5 py-4">
-                        <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
-                          product.quantity <= 0 ? 'bg-red-50 text-red-700' :
-                          product.quantity <= 10 ? 'bg-amber-50 text-amber-700' :
-                          'bg-emerald-50 text-emerald-700'
-                        }`}>
-                          {product.quantity} in stock
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(product.id, product.productName)}
-                          disabled={isDeleting}
-                          className="grid h-9 w-9 place-items-center border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          title="Delete product"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
+          <>
+            {/* Desktop table view */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="border-b border-[#eee6da] bg-[#f3ecdf] text-[11px] font-black uppercase tracking-[0.22em] text-[#514b43]">
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-[#7c7467]">No products found.</td>
+                    <th className="px-5 py-4">Product</th>
+                    <th className="px-5 py-4">SKU</th>
+                    <th className="px-5 py-4">Price</th>
+                    <th className="px-5 py-4">Stock</th>
+                    <th className="px-5 py-4 text-right">Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#eee6da]">
+                  {data?.items?.length ? (
+                    data.items.map((product) => (
+                      <tr key={product.id} className="transition-colors hover:bg-[#fbfaf7]">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-4">
+                            <Link to={`/admin/products/${product.id}`}>
+                              <img
+                                src={product.image}
+                                alt={product.productName}
+                                className="h-16 w-12 object-cover bg-[#efe7da]"
+                                onError={(event) => {
+                                  event.currentTarget.src = 'https://placehold.co/96x128?text=No+Image';
+                                }}
+                              />
+                            </Link>
+                            <div className="min-w-0">
+                              <Link to={`/admin/products/${product.id}`} className="block truncate text-sm font-bold text-[#111827] hover:text-[#9d731e] transition-colors">
+                                {product.productName}
+                              </Link>
+                              <p className="mt-1 text-xs text-[#7c7467]">{product.categoryName || 'Uncategorized'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 font-mono text-xs text-[#514b43]">{product.sku}</td>
+                        <td className="px-5 py-4 text-sm font-black text-[#111827]">{formatCurrency(product.price - product.discount)}</td>
+                        <td className="px-5 py-4">
+                          <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                            product.quantity <= 0 ? 'bg-red-50 text-red-700' :
+                            product.quantity <= 10 ? 'bg-amber-50 text-amber-700' :
+                            'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {product.quantity} in stock
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(product.id, product.productName)}
+                            disabled={isDeleting}
+                            className="grid h-9 w-9 place-items-center border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            title="Delete product"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-[#7c7467]">No products found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card view */}
+            <div className="lg:hidden divide-y divide-[#eee6da]">
+              {data?.items?.length ? (
+                data.items.map((product) => (
+                  <div key={product.id} className="p-4">
+                    <div className="flex gap-4">
+                      <Link to={`/admin/products/${product.id}`} className="shrink-0">
+                        <img
+                          src={product.image}
+                          alt={product.productName}
+                          className="h-20 w-16 object-cover bg-[#efe7da]"
+                          onError={(event) => {
+                            event.currentTarget.src = 'https://placehold.co/96x128?text=No+Image';
+                          }}
+                        />
+                      </Link>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <Link to={`/admin/products/${product.id}`} className="min-w-0">
+                            <p className="text-sm font-bold text-[#111827] truncate hover:text-[#9d731e]">{product.productName}</p>
+                            <p className="text-xs text-[#7c7467]">{product.categoryName || 'Uncategorized'}</p>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(product.id, product.productName)}
+                            disabled={isDeleting}
+                            className="shrink-0 grid h-8 w-8 place-items-center border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            title="Delete product"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <p className="text-sm font-black text-[#111827]">{formatCurrency(product.price - product.discount)}</p>
+                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${
+                            product.quantity <= 0 ? 'bg-red-50 text-red-700' :
+                            product.quantity <= 10 ? 'bg-amber-50 text-amber-700' :
+                            'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {product.quantity} in stock
+                          </span>
+                        </div>
+                        <p className="font-mono text-[11px] text-[#7c7467]">{product.sku}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-5 py-10 text-center text-sm text-[#7c7467]">No products found.</div>
+              )}
+            </div>
+          </>
         )}
 
         {data && data.totalPages > 1 && (

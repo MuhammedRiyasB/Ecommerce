@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Sparkles, Tag } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Sparkles, Tag, Flame } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   useGetHomeProductCardsQuery,
+  useGetTopSellingProductsQuery,
   type HomeProductCard,
 } from './catalogApiSlice';
 import ProductCard from './components/ProductCard';
@@ -32,7 +33,7 @@ const buildCatalogHref = (categoryId?: number) => (categoryId ? `/catalog?catego
 
 const getProductImage = (product?: { image?: string }) => product?.image;
 const HOME_PRODUCT_CARD_COUNT = 200;
-const NEW_ARRIVAL_COUNT = 16;
+const NEW_ARRIVAL_COUNT = 10;
 
 const scrollRail = (railId: string, direction: 'left' | 'right') => {
   const rail = document.getElementById(railId);
@@ -43,19 +44,21 @@ const Home: React.FC = () => {
   const [activeSlide, setActiveSlide] = useState(0);
 
   const { data: homeProductCards, isLoading: isHomeCardsLoading } = useGetHomeProductCardsQuery(HOME_PRODUCT_CARD_COUNT);
+  const { data: topSellingProductsData, isLoading: isTopSellingLoading } = useGetTopSellingProductsQuery(10);
 
   const products = useMemo(() => homeProductCards || [], [homeProductCards]);
   const newArrivalProducts = useMemo(() => products.slice(0, NEW_ARRIVAL_COUNT), [products]);
   const saleProducts = useMemo(() => products.filter((product) => product.discount > 0), [products]);
+  const topSellingProducts = useMemo(() => (topSellingProductsData || []) as HomeProductCard[], [topSellingProductsData]);
 
   const formalCategoryProduct = products.find((product) => {
     const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('shirt') && !name.includes('t-shirt') || name.includes('trouser') || name.includes('jacket');
+    return name.includes('shirt') && !name.includes('t-shirt') || name.includes('trouser');
   });
 
   const occasionCategoryProduct = products.find((product) => {
     const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('t-shirt') || name.includes('hoodie') || name.includes('sweatwear') || name.includes('jacket') || name.includes('jeans') || name.includes('cargo pant') || name.includes('jogger') || name.includes('short') || name.includes('trunck') || name.includes('boxer') || name.includes('vest') || name.includes('sweatshirt');
+    return name.includes('t-shirt') || name.includes('hoodie') || name.includes('sweatshirt') || name.includes('jacket') || name.includes('jeans') || name.includes('cargo pant') || name.includes('jogger') || name.includes('short');
   });
 
   const categoryImageMap = useMemo(() => {
@@ -337,12 +340,33 @@ const Home: React.FC = () => {
                 </p>
                 <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">Limited Offers</h2>
               </div>
-              <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
+              <Link to="/catalog?isSale=true" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
                 View sale products
               </Link>
             </div>
 
             <ProductRail railId="sale-products" products={saleProducts} isLoading={isProductLoading} emptyText="Sale products will appear here when discounts are active." />
+          </div>
+        </section>
+      )}
+
+      {topSellingProducts.length > 0 && (
+        <section className="border-y border-[#e8e0d0] bg-white py-14 sm:py-16">
+          <div className="container mx-auto">
+            <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+              <div>
+                <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.32em] text-[#b42318]">
+                  <Flame className="h-4 w-4" />
+                  Trending
+                </p>
+                <h2 className="mt-3 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">Top Selling Products</h2>
+              </div>
+              <Link to="/catalog" className="text-[11px] font-black uppercase tracking-[0.24em] text-[#111827] luxury-link">
+                View collection
+              </Link>
+            </div>
+
+            <ProductRail railId="top-selling-products" products={topSellingProducts} isLoading={isTopSellingLoading} emptyText="Trending products will appear here." />
           </div>
         </section>
       )}

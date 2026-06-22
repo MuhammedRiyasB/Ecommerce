@@ -8,7 +8,6 @@ import {
   LogOut,
   Menu,
   Package,
-  Search,
   ShoppingCart,
   Tags,
   Users,
@@ -125,16 +124,6 @@ const AdminLayout = () => {
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-[#9d731e]">Admin console</p>
                 <h1 className="mt-1 truncate text-2xl font-black uppercase tracking-[0.08em] text-[#111827]">{currentRoute.name}</h1>
               </div>
-            </div>
-
-            <div className="hidden min-w-0 flex-1 justify-center px-6 xl:flex">
-              <label className="relative w-full max-w-xl">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8174]" />
-                <input
-                  className="h-11 w-full border border-[#d8cdbb] bg-white pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-[#9a9388] focus:border-[#9d731e]"
-                  placeholder="Search orders, products, customers..."
-                />
-              </label>
             </div>
 
             <div className="flex items-center gap-3">

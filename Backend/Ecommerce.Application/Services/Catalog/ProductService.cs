@@ -674,7 +674,7 @@ namespace Ecommerce.Application.Services.Catalog
                 }
                 else if (slugLower == "occasional" || slugLower == "occasionwear")
                 {
-                    var occasionwear = new[] { "t-shirts", "hoodies", "sweatshirts", "jeans", "cargo pants", "joggers", "shorts" };
+                    var occasionwear = new[] { "t-shirts", "hoodies", "sweatwears", "jackets", "jeans", "cargo pants", "joggers", "shorts", "truncks", "boxers", "vests" };
                     query = query.Where(p => 
                         occasionwear.Contains(p.Category.CategoryName.ToLower()) || 
                         (p.SubCategory != null && occasionwear.Contains(p.SubCategory.CategoryName.ToLower())));

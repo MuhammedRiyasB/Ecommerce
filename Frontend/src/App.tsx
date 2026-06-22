@@ -22,7 +22,9 @@ import AdminLayout from './features/admin/AdminLayout';
 import AdminDashboardPage from './features/admin/AdminDashboardPage';
 import ProductManagementPage from './features/admin/ProductManagementPage';
 import ProductFormPage from './features/admin/ProductFormPage';
+import AdminProductDetailPage from './features/admin/AdminProductDetailPage';
 import OrderManagementPage from './features/admin/OrderManagementPage';
+import AdminOrderDetailPage from './features/admin/AdminOrderDetailPage';
 import CategoryManagementPage from './features/admin/CategoryManagementPage';
 import UserManagementPage from './features/admin/UserManagementPage';
 import AdminLoginPage from './features/admin/AdminLoginPage';
@@ -61,7 +63,9 @@ function App() {
             <Route path="products" element={<ProductManagementPage />} />
             <Route path="products/new" element={<ProductFormPage />} />
             <Route path="products/:id/edit" element={<ProductFormPage />} />
+            <Route path="products/:productId" element={<AdminProductDetailPage />} />
             <Route path="orders" element={<OrderManagementPage />} />
+            <Route path="orders/:orderId" element={<AdminOrderDetailPage />} />
             <Route path="categories" element={<CategoryManagementPage />} />
             <Route path="users" element={<UserManagementPage />} />
           </Route>

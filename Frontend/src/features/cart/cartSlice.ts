@@ -25,18 +25,18 @@ const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
-    addToCart: (state, action: PayloadAction<{ product: Product; productVariantId: string; selectedSize: string; selectedColor: string; deliveryPincode?: string }>) => {
-      const { product, productVariantId, selectedSize, selectedColor, deliveryPincode } = action.payload;
+    addToCart: (state, action: PayloadAction<{ product: Product; productVariantId: string; selectedSize: string; selectedColor: string; deliveryPincode?: string; quantity?: number }>) => {
+      const { product, productVariantId, selectedSize, selectedColor, deliveryPincode, quantity = 1 } = action.payload;
       const cartItemKey = `${product.id}:${productVariantId}`;
       const existingItem = state.items.find((item) => item.cartItemKey === cartItemKey);
       if (existingItem) {
-        existingItem.cartQuantity += 1;
+        existingItem.cartQuantity += quantity;
       } else {
         state.items.push({
           ...product,
           cartItemKey,
           productVariantId,
-          cartQuantity: 1,
+          cartQuantity: quantity,
           selectedSize,
           selectedColor,
           deliveryPincode,

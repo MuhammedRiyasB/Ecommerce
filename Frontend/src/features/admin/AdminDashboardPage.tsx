@@ -1,6 +1,7 @@
-import { useGetRevenueQuery, useGetAllOrdersQuery, useGetAllUsersQuery } from './adminApiSlice';
-import { Activity, ArrowUpRight, CheckCircle2, Package, ReceiptText, TrendingUp, Users } from 'lucide-react';
-import { useGetProductsQuery } from '../catalog/catalogApiSlice';
+import { useState } from 'react';
+import { useGetDashboardStatsQuery, useGetLowStockProductsQuery, useGetAllOrdersQuery } from './adminApiSlice';
+import { Activity, ArrowUpRight, CheckCircle2, Package, ReceiptText, TrendingUp, Users, Truck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -10,19 +11,20 @@ const formatCurrency = (amount: number) =>
   }).format(amount);
 
 const AdminDashboardPage = () => {
-  const { data: revenueData, isLoading: isRevenueLoading, error } = useGetRevenueQuery();
-  const { data: productsData, isLoading: isProductsLoading } = useGetProductsQuery({ pageNumber: 1, pageSize: 5 });
-  const { data: ordersData, isLoading: isOrdersLoading } = useGetAllOrdersQuery({ pageNumber: 1, pageSize: 5 });
-  const { data: usersData, isLoading: isUsersLoading } = useGetAllUsersQuery({ pageNumber: 1, pageSize: 5 });
+  const [page, setPage] = useState(1);
+  const { data: statsData, isLoading: isStatsLoading, error: statsError } = useGetDashboardStatsQuery();
+  const { data: lowStockProducts, isLoading: isProductsLoading, error: productsError } = useGetLowStockProductsQuery();
+  const { data: ordersData, isLoading: isOrdersLoading, error: ordersError } = useGetAllOrdersQuery({ pageNumber: page, pageSize: 5 });
 
-  const isLoading = isRevenueLoading || isProductsLoading || isOrdersLoading || isUsersLoading;
-  const lowStockCount = productsData?.items.filter((product) => product.quantity <= 10).length ?? 0;
-  const pendingOrders = ordersData?.items.filter((order) => order.orderStatus.toLowerCase() === 'pending').length ?? 0;
+  const isError = statsError || productsError || ordersError;
 
-  if (error) {
+  if (isError) {
     return (
       <div className="border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-700">
-        Failed to load dashboard statistics.
+        <p>Failed to load dashboard statistics.</p>
+        {statsError && <p>Stats Error: {JSON.stringify(statsError)}</p>}
+        {productsError && <p>Products Error: {JSON.stringify(productsError)}</p>}
+        {ordersError && <p>Orders Error: {JSON.stringify(ordersError)}</p>}
       </div>
     );
   }
@@ -30,31 +32,50 @@ const AdminDashboardPage = () => {
   const kpis = [
     {
       label: 'Total Revenue',
-      value: revenueData ? formatCurrency(revenueData.totalRevenue) : formatCurrency(0),
+      value: statsData ? formatCurrency(statsData.totalRevenue) : formatCurrency(0),
       detail: 'Confirmed order item revenue',
       icon: TrendingUp,
       tone: 'gold',
     },
     {
-      label: 'Items Sold',
-      value: revenueData?.totalItemsSold.toLocaleString('en-IN') || '0',
-      detail: 'Units moved across all orders',
+      label: 'Items Delivered',
+      value: (statsData?.totalItemsDelivered ?? 0).toLocaleString('en-IN'),
+      detail: 'Units successfully delivered',
       icon: Package,
-      tone: 'navy',
+      tone: 'emerald',
+      href: '/admin/orders?status=Delivered'
     },
     {
-      label: 'Pending Orders',
-      value: pendingOrders.toString(),
+      label: 'Items Cancelled',
+      value: (statsData?.totalItemsCancelled ?? 0).toLocaleString('en-IN'),
+      detail: 'Units from cancelled orders',
+      icon: Package,
+      tone: 'red',
+      href: '/admin/orders?status=Cancelled'
+    },
+    {
+      label: 'Processing Orders',
+      value: (statsData?.totalProcessingOrders ?? 0).toLocaleString('en-IN'),
       detail: 'Need fulfilment review',
       icon: ReceiptText,
       tone: 'amber',
+      href: '/admin/orders?status=Processing'
+    },
+    {
+      label: 'Shipped Orders',
+      value: (statsData?.totalShippedOrders ?? 0).toLocaleString('en-IN'),
+      detail: 'On the way to customers',
+      icon: Truck,
+      tone: 'indigo',
+      href: '/admin/orders?status=Shipped'
     },
     {
       label: 'Customers',
-      value: usersData?.totalCount.toLocaleString('en-IN') || '0',
+      value: (statsData?.totalCustomers ?? 0).toLocaleString('en-IN'),
       detail: 'Registered customer accounts',
       icon: Users,
       tone: 'green',
+      href: '/admin/users'
     },
   ];
 
@@ -81,7 +102,7 @@ const AdminDashboardPage = () => {
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#d7b46a]">Low stock styles</p>
               <div className="mt-4 flex items-center gap-3">
                 <Activity className="h-6 w-6 text-amber-300" />
-                <span className="text-2xl font-black">{lowStockCount}</span>
+                <span className="text-2xl font-black">{statsData?.lowStockCount || 0}</span>
               </div>
             </div>
           </div>
@@ -89,25 +110,40 @@ const AdminDashboardPage = () => {
       </section>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((item) => (
-          <div key={item.label} className="border border-[#e1d5c2] bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#8a8174]">{item.label}</p>
-                <p className="mt-3 text-3xl font-black text-[#111827]">{isLoading ? '...' : item.value}</p>
+        {kpis.map((item) => {
+          const CardContent = (
+            <>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#8a8174]">{item.label}</p>
+                  <p className="mt-3 text-3xl font-black text-[#111827]">{isStatsLoading ? '...' : item.value}</p>
+                </div>
+                <div className={`grid h-11 w-11 place-items-center ${
+                  item.tone === 'gold' ? 'bg-[#f3ecdf] text-[#9d731e]' :
+                  item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' :
+                  item.tone === 'amber' ? 'bg-amber-50 text-amber-700' :
+                  item.tone === 'indigo' ? 'bg-indigo-50 text-indigo-700' :
+                  item.tone === 'emerald' ? 'bg-emerald-50 text-emerald-700' :
+                  item.tone === 'red' ? 'bg-red-50 text-red-700' :
+                  'bg-[#111827] text-[#d7b46a]'
+                }`}>
+                  <item.icon className="h-5 w-5" />
+                </div>
               </div>
-              <div className={`grid h-11 w-11 place-items-center ${
-                item.tone === 'gold' ? 'bg-[#f3ecdf] text-[#9d731e]' :
-                item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' :
-                item.tone === 'amber' ? 'bg-amber-50 text-amber-700' :
-                'bg-[#111827] text-[#d7b46a]'
-              }`}>
-                <item.icon className="h-5 w-5" />
-              </div>
+              <p className="mt-4 text-sm text-[#6f6659]">{item.detail}</p>
+            </>
+          );
+
+          return item.href ? (
+            <Link key={item.label} to={item.href} className="border border-[#e1d5c2] bg-white p-5 shadow-sm hover:border-[#9d731e] hover:shadow-md transition-all block">
+              {CardContent}
+            </Link>
+          ) : (
+            <div key={item.label} className="border border-[#e1d5c2] bg-white p-5 shadow-sm">
+              {CardContent}
             </div>
-            <p className="mt-4 text-sm text-[#6f6659]">{item.detail}</p>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -120,9 +156,11 @@ const AdminDashboardPage = () => {
             <ArrowUpRight className="h-5 w-5 text-[#9d731e]" />
           </div>
           <div className="divide-y divide-[#eee6da]">
-            {ordersData?.items.length ? (
+            {isOrdersLoading ? (
+              <div className="px-5 py-8 text-sm text-[#7c7467]">Loading orders...</div>
+            ) : ordersData?.items.length ? (
               ordersData.items.map((order) => (
-                <div key={order.orderId} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                <Link to={`/admin/orders/${order.orderId}`} key={order.orderId} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center hover:bg-gray-50 transition-colors">
                   <div>
                     <p className="font-mono text-xs font-bold text-[#111827]">{order.transactionId || order.orderId.slice(0, 8)}</p>
                     <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
@@ -131,12 +169,36 @@ const AdminDashboardPage = () => {
                   <span className="w-fit bg-[#f3ecdf] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#9d731e]">
                     {order.orderStatus}
                   </span>
-                </div>
+                </Link>
               ))
             ) : (
               <div className="px-5 py-8 text-sm text-[#7c7467]">No orders yet.</div>
             )}
           </div>
+          {ordersData && ordersData.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-[#eee6da] bg-[#fbfaf7] px-5 py-3">
+              <p className="text-xs text-[#6f6659]">
+                Page <span className="font-bold text-[#111827]">{ordersData.pageNumber}</span> of{' '}
+                <span className="font-bold text-[#111827]">{ordersData.totalPages}</span>
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((value) => value - 1)}
+                  className="h-7 border border-[#d8cdbb] bg-white px-3 text-[10px] font-bold uppercase tracking-[0.16em] disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  disabled={page === ordersData.totalPages}
+                  onClick={() => setPage((value) => value + 1)}
+                  className="h-7 border border-[#d8cdbb] bg-white px-3 text-[10px] font-bold uppercase tracking-[0.16em] disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="border border-[#e1d5c2] bg-white">
@@ -145,9 +207,11 @@ const AdminDashboardPage = () => {
             <h3 className="mt-1 text-lg font-black uppercase tracking-[0.08em] text-[#111827]">Stock Watchlist</h3>
           </div>
           <div className="divide-y divide-[#eee6da]">
-            {productsData?.items.length ? (
-              productsData.items.map((product) => (
-                <div key={product.id} className="flex items-center gap-4 px-5 py-4">
+            {isProductsLoading ? (
+              <div className="px-5 py-8 text-sm text-[#7c7467]">Loading stock watchlist...</div>
+            ) : lowStockProducts?.length ? (
+              lowStockProducts.map((product) => (
+                <Link to={`/admin/products/${product.id}`} key={product.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
                   <img src={product.image} alt="" className="h-14 w-12 object-cover bg-[#efe7da]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-[#111827]">{product.productName}</p>
@@ -158,7 +222,7 @@ const AdminDashboardPage = () => {
                   }`}>
                     {product.quantity} left
                   </span>
-                </div>
+                </Link>
               ))
             ) : (
               <div className="px-5 py-8 text-sm text-[#7c7467]">No products found.</div>

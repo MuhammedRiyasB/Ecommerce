@@ -9,6 +9,7 @@ namespace Ecommerce.Application.DTOs.Orders
         public decimal TotalPrice { get; set; }
         public string OrderStatus { get; set; } = null!;
         public string TransactionId { get; set; } = null!;
+        public string? UserEmail { get; set; }
         public string PaymentMethod { get; set; } = null!;
         public string? CancellationReason { get; set; }
         public string? ReturnReason { get; set; }

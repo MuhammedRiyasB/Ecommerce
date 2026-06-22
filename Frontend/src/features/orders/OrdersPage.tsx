@@ -23,9 +23,6 @@ const formatStatusLabel = (status: string) => {
     shipped: 'Shipped',
     delivered: 'Delivered',
     cancelled: 'Cancelled',
-    returnrequested: 'Return Requested',
-    replacementrequested: 'Replacement Requested',
-    returned: 'Returned',
     refundinitiated: 'Refund Initiated',
     refunded: 'Refunded',
   };
@@ -49,10 +46,6 @@ const getStatusColor = (status: string) => {
       return 'text-orange-600 bg-orange-50';
     case 'pending':
       return 'text-amber-600 bg-amber-50';
-    case 'returnrequested':
-      return 'text-purple-600 bg-purple-50';
-    case 'replacementrequested':
-      return 'text-indigo-600 bg-indigo-50';
     case 'refunded':
     case 'refundinitiated':
       return 'text-green-700 bg-green-50';
@@ -276,12 +269,6 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
       {isCancelled && order.cancellationReason && (
         <p className="mt-3 rounded-sm bg-red-50 px-3 py-2 text-xs text-red-700">
           <span className="font-bold">Cancelled because:</span> {order.cancellationReason}
-        </p>
-      )}
-
-      {!isCancelled && order.returnReason && (
-        <p className="mt-3 rounded-sm bg-purple-50 px-3 py-2 text-xs text-purple-700">
-          <span className="font-bold">Return reason:</span> {order.returnReason}
         </p>
       )}
 

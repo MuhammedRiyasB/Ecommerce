@@ -48,8 +48,8 @@ namespace Ecommerce.Api.Controllers.Orders
 
         [HttpGet("all-orders")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAllOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
-            => Ok(await _orderService.GetAllOrdersAsync(pageNumber, pageSize));
+        public async Task<IActionResult> GetAllOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? status = null)
+            => Ok(await _orderService.GetAllOrdersAsync(pageNumber, pageSize, status));
 
         [HttpGet("{orderId}")]
         [Authorize]
@@ -76,25 +76,7 @@ namespace Ecommerce.Api.Controllers.Orders
                 : BadRequest(result);
         }
 
-        [HttpPost("{orderId:guid}/return")]
-        [Authorize(Roles = "User")]
-        public async Task<IActionResult> RequestReturn(Guid orderId, [FromBody] OrderActionRequestDto dto)
-        {
-            var result = await _orderService.RequestReturnAsync(GetUserId(), orderId, dto.Reason);
-            return result.Message.Contains("submitted", StringComparison.OrdinalIgnoreCase)
-                ? Ok(result)
-                : BadRequest(result);
-        }
 
-        [HttpPost("{orderId:guid}/replacement")]
-        [Authorize(Roles = "User")]
-        public async Task<IActionResult> RequestReplacement(Guid orderId, [FromBody] OrderActionRequestDto dto)
-        {
-            var result = await _orderService.RequestReplacementAsync(GetUserId(), orderId, dto.Reason);
-            return result.Message.Contains("submitted", StringComparison.OrdinalIgnoreCase)
-                ? Ok(result)
-                : BadRequest(result);
-        }
 
         [HttpGet("revenue")]
         [Authorize(Roles = "Admin")]

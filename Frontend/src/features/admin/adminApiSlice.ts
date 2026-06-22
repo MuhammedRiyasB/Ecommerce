@@ -6,6 +6,7 @@ interface PaginatedResponse<T> {
   totalCount: number;
   pageNumber: number;
   pageSize: number;
+  totalPages: number;
 }
 
 interface AdminUser extends User {
@@ -18,13 +19,19 @@ interface OrderDetails {
   totalPrice: number;
   orderStatus: string;
   transactionId: string;
+  userEmail?: string;
   address: any; // Simplified for now
   orderItems: any[]; // Simplified for now
 }
 
-interface RevenueResponse {
+interface DashboardStats {
   totalRevenue: number;
-  totalItemsSold: number;
+  totalItemsDelivered: number;
+  totalItemsCancelled: number;
+  totalProcessingOrders: number;
+  totalShippedOrders: number;
+  totalCustomers: number;
+  lowStockCount: number;
 }
 
 export const adminApiSlice = apiSlice.injectEndpoints({
@@ -56,7 +63,7 @@ export const adminApiSlice = apiSlice.injectEndpoints({
     }),
 
     // Orders Management
-    getAllOrders: builder.query<PaginatedResponse<OrderDetails>, { pageNumber: number; pageSize: number }>({
+    getAllOrders: builder.query<PaginatedResponse<OrderDetails>, { pageNumber: number; pageSize: number; status?: string }>({
       query: (params) => ({
         url: '/Order/all-orders',
         params,
@@ -73,9 +80,13 @@ export const adminApiSlice = apiSlice.injectEndpoints({
     }),
 
     // Dashboard Statistics
-    getRevenue: builder.query<RevenueResponse, void>({
-      query: () => '/Order/revenue',
-      providesTags: ['Order'],
+    getDashboardStats: builder.query<DashboardStats, void>({
+      query: () => '/Admin/dashboard-stats',
+      providesTags: ['Order', 'User', 'Product'],
+    }),
+    getLowStockProducts: builder.query<any[], void>({
+      query: () => '/Admin/low-stock-products?threshold=10&limit=5',
+      providesTags: ['Product'],
     }),
 
     // Toggle Category Status
@@ -103,7 +114,8 @@ export const {
   useCreateCategoryMutation,
   useGetAllOrdersQuery,
   useChangeOrderStatusMutation,
-  useGetRevenueQuery,
+  useGetDashboardStatsQuery,
+  useGetLowStockProductsQuery,
   useToggleCategoryStatusMutation,
   useDeleteCategoryMutation,
 } = adminApiSlice;

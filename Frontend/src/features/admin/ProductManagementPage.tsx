@@ -14,8 +14,16 @@ const formatCurrency = (amount: number) =>
 const ProductManagementPage = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
 
-  const { data, isLoading } = useGetProductsQuery({ pageNumber: page, pageSize: 10, search: search || undefined });
+  const { data, isLoading } = useGetProductsQuery({
+    pageNumber: page,
+    pageSize: 10,
+    search: search || undefined,
+    minPrice: minPrice ? Number(minPrice) : undefined,
+    maxPrice: maxPrice ? Number(maxPrice) : undefined,
+  });
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
 
   const handleDelete = async (id: string, name: string) => {
@@ -48,7 +56,7 @@ const ProductManagementPage = () => {
 
       <section className="border border-[#e1d5c2] bg-white">
         <div className="flex flex-col gap-4 border-b border-[#eee6da] bg-[#fbfaf7] p-4 md:flex-row md:items-center md:justify-between">
-          <label className="relative w-full max-w-lg">
+          <label className="relative w-full md:w-[40%]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8174]" />
             <input
               type="search"
@@ -61,6 +69,35 @@ const ProductManagementPage = () => {
               className="h-11 w-full border border-[#d8cdbb] bg-white pl-10 pr-3 text-sm outline-none focus:border-[#9d731e]"
             />
           </label>
+          <div className="flex w-full md:w-auto items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              placeholder="Min ₹"
+              value={minPrice}
+              onChange={(event) => {
+                const val = event.target.value;
+                if (Number(val) < 0) return;
+                setMinPrice(val);
+                setPage(1);
+              }}
+              className="h-11 w-24 border border-[#d8cdbb] bg-white px-3 text-sm outline-none focus:border-[#9d731e]"
+            />
+            <span className="text-[#8a8174]">-</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="Max ₹"
+              value={maxPrice}
+              onChange={(event) => {
+                const val = event.target.value;
+                if (Number(val) < 0) return;
+                setMaxPrice(val);
+                setPage(1);
+              }}
+              className="h-11 w-24 border border-[#d8cdbb] bg-white px-3 text-sm outline-none focus:border-[#9d731e]"
+            />
+          </div>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#7c7467]">
             {data?.totalCount || 0} styles
           </p>
@@ -88,16 +125,20 @@ const ProductManagementPage = () => {
                     <tr key={product.id} className="transition-colors hover:bg-[#fbfaf7]">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-4">
-                          <img
-                            src={product.image}
-                            alt={product.productName}
-                            className="h-16 w-12 object-cover bg-[#efe7da]"
-                            onError={(event) => {
-                              event.currentTarget.src = 'https://placehold.co/96x128?text=No+Image';
-                            }}
-                          />
+                          <Link to={`/admin/products/${product.id}`}>
+                            <img
+                              src={product.image}
+                              alt={product.productName}
+                              className="h-16 w-12 object-cover bg-[#efe7da]"
+                              onError={(event) => {
+                                event.currentTarget.src = 'https://placehold.co/96x128?text=No+Image';
+                              }}
+                            />
+                          </Link>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-[#111827]">{product.productName}</p>
+                            <Link to={`/admin/products/${product.id}`} className="block truncate text-sm font-bold text-[#111827] hover:text-[#9d731e] transition-colors">
+                              {product.productName}
+                            </Link>
                             <p className="mt-1 text-xs text-[#7c7467]">{product.categoryName || 'Uncategorized'}</p>
                           </div>
                         </div>

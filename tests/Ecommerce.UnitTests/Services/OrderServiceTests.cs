@@ -471,43 +471,5 @@ public class OrderServiceTests
         result.Message.Should().Be("This order can no longer be cancelled");
     }
 
-    [Fact]
-    public async Task RequestReturnAsync_DeliveredOrder_SubmitsReturnRequest()
-    {
-        var userId = Guid.NewGuid();
-        var orderId = Guid.NewGuid();
-        var order = new Order
-        {
-            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Delivered,
-            TotalPrice = 1000, TransactionId = "TXN3", PaymentMethod = "card"
-        };
-
-        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
-        _userRepoMock.Setup(r => r.Query()).Returns(new List<User> { new() { UserId = userId, Email = "customer@test.com" } }.AsQueryable().BuildMock());
-        _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
-
-        var result = await _sut.RequestReturnAsync(userId, orderId, "Damaged item");
-
-        result.Message.Should().Be("Return request submitted");
-        order.OrderStatus.Should().Be(OrderStatus.ReturnRequested);
-        order.ReturnReason.Should().Be("Damaged item");
-    }
-
-    [Fact]
-    public async Task RequestReplacementAsync_NonDeliveredOrder_ReturnsErrorMessage()
-    {
-        var userId = Guid.NewGuid();
-        var orderId = Guid.NewGuid();
-        var order = new Order
-        {
-            OrderId = orderId, UserId = userId, OrderStatus = OrderStatus.Pending,
-            TotalPrice = 1000, TransactionId = "TXN4", PaymentMethod = "card"
-        };
-
-        _orderRepoMock.Setup(r => r.Query()).Returns(new List<Order> { order }.AsQueryable().BuildMock());
-
-        var result = await _sut.RequestReplacementAsync(userId, orderId, "Wrong size");
-
-        result.Message.Should().Be("Only delivered orders can be replaced");
-    }
 }
+

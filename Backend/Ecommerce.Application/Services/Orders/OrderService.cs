@@ -56,10 +56,27 @@ namespace Ecommerce.Application.Services.Orders
                 return new UpdateOrderStatusResponseDto { Message = "invalidstatus" };
             }
 
-            var order = await _orderRepo.Query().FirstOrDefaultAsync(o => o.OrderId == orderId);
+            var order = await _orderRepo.Query()
+                .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+                .Include(o => o.Address)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
             if (order == null)
             {
                 return new UpdateOrderStatusResponseDto { Message = "Order not found" };
+            }
+
+            // Unidirectional flow enforcement
+            if (order.OrderStatus == OrderStatus.Delivered || order.OrderStatus == OrderStatus.Cancelled)
+            {
+                return new UpdateOrderStatusResponseDto { Message = "Cannot update status of a delivered or cancelled order" };
+            }
+            if (order.OrderStatus == OrderStatus.Processing && parsedStatus != OrderStatus.Shipped)
+            {
+                return new UpdateOrderStatusResponseDto { Message = "Order in Processing can only be changed to Shipped" };
+            }
+            if (order.OrderStatus == OrderStatus.Shipped && parsedStatus != OrderStatus.Delivered)
+            {
+                return new UpdateOrderStatusResponseDto { Message = "Order in Shipped can only be changed to Delivered" };
             }
 
             order.OrderStatus = parsedStatus;
@@ -227,29 +244,17 @@ namespace Ecommerce.Application.Services.Orders
                 return;
             }
 
-            var orderRows = string.Join("", order.OrderItems.Select(item =>
-                $"<tr><td style='padding:8px 0'>{System.Net.WebUtility.HtmlEncode(item.SelectedColor)} / {System.Net.WebUtility.HtmlEncode(item.SelectedSize)}</td><td style='padding:8px 0;text-align:center'>{item.Quantity}</td><td style='padding:8px 0;text-align:right'>Rs. {item.TotalPrice:N0}</td></tr>"));
+            var populatedOrder = await _orderRepo.Query()
+                .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+                .Include(o => o.Address)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrderId == order.OrderId);
 
-            var body = $"""
-                <div style='font-family:Arial,sans-serif;color:#111827'>
-                    <h2 style='margin:0 0 12px'>Order confirmed</h2>
-                    <p>Your order <strong>{order.OrderId}</strong> has been placed successfully.</p>
-                    <table style='width:100%;border-collapse:collapse;margin-top:16px'>
-                        <thead>
-                            <tr>
-                                <th style='text-align:left;border-bottom:1px solid #eee;padding-bottom:8px'>Variant</th>
-                                <th style='border-bottom:1px solid #eee;padding-bottom:8px'>Qty</th>
-                                <th style='text-align:right;border-bottom:1px solid #eee;padding-bottom:8px'>Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>{orderRows}</tbody>
-                    </table>
-                    <p style='font-size:18px;font-weight:700'>Total paid: Rs. {order.TotalPrice:N0}</p>
-                    <p>We will email you again when the order status changes.</p>
-                </div>
-                """;
+            if (populatedOrder == null) return;
 
-            await _emailJobQueue.QueueAsync(new EmailJobMessage(user.Email, $"Order confirmed - {order.OrderId}", body));
+            var body = GenerateRichEmailHtml(populatedOrder, "Order Confirmed", $"Your order <strong>{populatedOrder.OrderId}</strong> has been placed successfully. Thank you for shopping with us!");
+
+            await _emailJobQueue.QueueAsync(new EmailJobMessage(user.Email, $"Order confirmed - {populatedOrder.OrderId}", body));
         }
 
         private async Task QueueOrderLifecycleEmailAsync(Order order, string subject, string heading, string messageHtml, string? reason = null)
@@ -262,19 +267,113 @@ namespace Ecommerce.Application.Services.Orders
 
             var reasonHtml = string.IsNullOrWhiteSpace(reason)
                 ? string.Empty
-                : $"<p><strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(reason.Trim())}</p>";
+                : $"<p style='color:#ef4444;font-size:14px;margin-top:10px;'><strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(reason.Trim())}</p>";
 
-            var body = $"""
-                <div style='font-family:Arial,sans-serif;color:#111827'>
-                    <h2 style='margin:0 0 12px'>{System.Net.WebUtility.HtmlEncode(heading)}</h2>
-                    <p>Order <strong>{order.OrderId}</strong></p>
-                    <p>{messageHtml}</p>
-                    {reasonHtml}
-                    <p style='margin-top:16px;color:#4b5563'>You can view the latest order details from your Urbaniq account.</p>
-                </div>
-                """;
+            var body = GenerateRichEmailHtml(order, heading, messageHtml, reasonHtml);
 
             await _emailJobQueue.QueueAsync(new EmailJobMessage(user.Email, subject, body));
+        }
+
+        private static string GenerateRichEmailHtml(Order order, string heading, string messageHtml, string? reasonHtml = null)
+        {
+            var itemsHtml = string.Join("", order.OrderItems.Select(item => $@"
+                <tr>
+                    <td style='padding:16px 0;border-bottom:1px solid #e5e7eb;'>
+                        <table style='width:100%;border-collapse:collapse;'>
+                            <tr>
+                                <td style='width:80px;vertical-align:top;padding-right:16px;'>
+                                    <img src='{item.Product?.Image ?? ""}' alt='Product Image' style='width:80px;height:100px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;' />
+                                </td>
+                                <td style='vertical-align:top;'>
+                                    <p style='margin:0 0 4px;font-weight:600;color:#111827;font-size:16px;'>{System.Net.WebUtility.HtmlEncode(item.Product?.ProductName ?? "Product")}</p>
+                                    <p style='margin:0 0 4px;color:#6b7280;font-size:14px;'>Color: {System.Net.WebUtility.HtmlEncode(item.SelectedColor)} | Size: {System.Net.WebUtility.HtmlEncode(item.SelectedSize)}</p>
+                                    <p style='margin:0;color:#374151;font-size:14px;'>Qty: {item.Quantity} × Rs. {item.UnitPrice:N0}</p>
+                                </td>
+                                <td style='vertical-align:top;text-align:right;'>
+                                    <p style='margin:0;font-weight:700;color:#111827;font-size:16px;'>Rs. {item.TotalPrice:N0}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>"));
+
+            var address = order.Address;
+            var addressHtml = address != null ? $@"
+                <div style='background-color:#f9fafb;padding:16px;border-radius:6px;margin-top:24px;border:1px solid #e5e7eb;'>
+                    <h3 style='margin:0 0 12px;font-size:16px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px;'>Delivery Address</h3>
+                    <p style='margin:0 0 4px;font-weight:600;color:#374151;'>{System.Net.WebUtility.HtmlEncode(address.FullName)}</p>
+                    <p style='margin:0 0 4px;color:#4b5563;font-size:14px;'>{System.Net.WebUtility.HtmlEncode(address.HouseName)}, {System.Net.WebUtility.HtmlEncode(address.Place)}</p>
+                    <p style='margin:0 0 4px;color:#4b5563;font-size:14px;'>{System.Net.WebUtility.HtmlEncode(address.PostOffice)} - {System.Net.WebUtility.HtmlEncode(address.Pincode)}</p>
+                    <p style='margin:0;color:#4b5563;font-size:14px;'>Phone: {System.Net.WebUtility.HtmlEncode(address.PhoneNumber)}</p>
+                </div>" : "";
+
+            var paymentMethodDisplay = string.Equals(order.PaymentMethod, "cod", StringComparison.OrdinalIgnoreCase) ? "Cash on Delivery" : "Online Payment (Card)";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <style>
+        @media only screen and (max-width: 600px) {{
+            .container {{ width: 100% !important; padding: 10px !important; }}
+            .content {{ padding: 20px !important; }}
+        }}
+    </style>
+</head>
+<body style='margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,""Segoe UI"",Roboto,Helvetica,Arial,sans-serif;'>
+    <div style='width:100%;background-color:#f3f4f6;padding:40px 0;'>
+        <div class='container' style='max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);'>
+            
+            <div style='background-color:#111827;padding:24px;text-align:center;'>
+                <h1 style='margin:0;color:#ffffff;font-size:28px;font-weight:900;letter-spacing:4px;text-transform:uppercase;'>URBANIQ</h1>
+            </div>
+
+            <div class='content' style='padding:32px;'>
+                <h2 style='margin:0 0 16px;color:#111827;font-size:24px;font-weight:700;'>{System.Net.WebUtility.HtmlEncode(heading)}</h2>
+                <div style='color:#374151;font-size:16px;line-height:1.5;margin-bottom:24px;'>
+                    <p style='margin:0 0 8px;'>{messageHtml}</p>
+                    {reasonHtml}
+                </div>
+
+                <div style='background-color:#f9fafb;padding:16px;border-radius:6px;margin-bottom:24px;border:1px solid #e5e7eb;'>
+                    <p style='margin:0 0 8px;color:#4b5563;font-size:14px;'>Order ID: <strong style='color:#111827;'>{order.OrderId}</strong></p>
+                    <p style='margin:0 0 8px;color:#4b5563;font-size:14px;'>Order Date: <strong style='color:#111827;'>{order.OrderDate:dd MMM yyyy, hh:mm tt}</strong></p>
+                    <p style='margin:0;color:#4b5563;font-size:14px;'>Payment Method: <strong style='color:#111827;'>{paymentMethodDisplay}</strong></p>
+                </div>
+
+                <h3 style='margin:0 0 16px;font-size:18px;color:#111827;border-bottom:2px solid #111827;padding-bottom:8px;'>Order Details</h3>
+                <table style='width:100%;border-collapse:collapse;margin-bottom:24px;'>
+                    <tbody>
+                        {itemsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td style='padding:16px 0 0;text-align:right;'>
+                                <p style='margin:0;font-size:16px;color:#4b5563;'>Total Amount</p>
+                                <p style='margin:4px 0 0;font-size:24px;font-weight:800;color:#111827;'>Rs. {order.TotalPrice:N0}</p>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                {addressHtml}
+                
+                <div style='margin-top:32px;text-align:center;'>
+                    <a href='https://urbaniq.ddnsking.com/profile/orders' style='display:inline-block;background-color:#111827;color:#ffffff;text-decoration:none;padding:14px 32px;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border-radius:4px;'>Track Your Order</a>
+                </div>
+            </div>
+
+            <div style='background-color:#f9fafb;padding:24px;text-align:center;border-top:1px solid #e5e7eb;'>
+                <p style='margin:0 0 8px;color:#6b7280;font-size:13px;'>If you have any questions, please reply to this email or visit our help center.</p>
+                <p style='margin:0;color:#9ca3af;font-size:12px;'>&copy; {DateTime.UtcNow.Year} Urbaniq. All rights reserved.</p>
+            </div>
+            
+        </div>
+    </div>
+</body>
+</html>";
         }
 
         public async Task<PagedResult<OrderDetailsResponseDto>> GetOrdersByUserIdAsync(Guid userId, int pageNumber = 1, int pageSize = 10)
@@ -298,12 +397,20 @@ namespace Ecommerce.Application.Services.Orders
             };
         }
 
-        public async Task<PagedResult<OrderDetailsResponseDto>> GetAllOrdersAsync(int pageNumber = 1, int pageSize = 10)
+        public async Task<PagedResult<OrderDetailsResponseDto>> GetAllOrdersAsync(int pageNumber = 1, int pageSize = 10, string? status = null)
         {
             var query = _orderRepo.Query()
                 .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
                 .Include(o => o.Address)
-                .OrderByDescending(o => o.OrderDate);
+                .Include(o => o.User)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<OrderStatus>(status, true, out var orderStatus))
+            {
+                query = query.Where(o => o.OrderStatus == orderStatus);
+            }
+
+            query = query.OrderByDescending(o => o.OrderDate);
 
             var totalCount = await query.CountAsync();
             var orders = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -349,6 +456,7 @@ namespace Ecommerce.Application.Services.Orders
                 .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
                 .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
                 .ThenInclude(v => v.Product)
+                .Include(o => o.Address)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId && o.UserId == userId);
 
             if (order == null)
@@ -393,73 +501,7 @@ namespace Ecommerce.Application.Services.Orders
             };
         }
 
-        public async Task<UpdateOrderStatusResponseDto> RequestReturnAsync(Guid userId, Guid orderId, string reason)
-        {
-            var order = await _orderRepo.Query()
-                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.UserId == userId);
 
-            if (order == null)
-            {
-                return new UpdateOrderStatusResponseDto { Message = "Order not found" };
-            }
-
-            if (order.OrderStatus != OrderStatus.Delivered)
-            {
-                return new UpdateOrderStatusResponseDto { Message = "Only delivered orders can be returned" };
-            }
-
-            order.OrderStatus = OrderStatus.ReturnRequested;
-            order.ReturnReason = reason.Trim();
-            order.ReturnRequestedAtUtc = DateTime.UtcNow;
-            _orderRepo.Update(order);
-            await _unitOfWork.SaveChangesAsync();
-            await QueueOrderLifecycleEmailAsync(
-                order,
-                $"Return requested - {order.OrderId}",
-                "Return request received",
-                "Your return request has been submitted. Our team will review it and update you shortly.",
-                order.ReturnReason);
-
-            return new UpdateOrderStatusResponseDto
-            {
-                OrderStatus = order.OrderStatus.ToString(),
-                Message = "Return request submitted"
-            };
-        }
-
-        public async Task<UpdateOrderStatusResponseDto> RequestReplacementAsync(Guid userId, Guid orderId, string reason)
-        {
-            var order = await _orderRepo.Query()
-                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.UserId == userId);
-
-            if (order == null)
-            {
-                return new UpdateOrderStatusResponseDto { Message = "Order not found" };
-            }
-
-            if (order.OrderStatus != OrderStatus.Delivered)
-            {
-                return new UpdateOrderStatusResponseDto { Message = "Only delivered orders can be replaced" };
-            }
-
-            order.OrderStatus = OrderStatus.ReplacementRequested;
-            order.ReplacementReason = reason.Trim();
-            order.ReplacementRequestedAtUtc = DateTime.UtcNow;
-            _orderRepo.Update(order);
-            await _unitOfWork.SaveChangesAsync();
-            await QueueOrderLifecycleEmailAsync(
-                order,
-                $"Replacement requested - {order.OrderId}",
-                "Replacement request received",
-                "Your replacement request has been submitted. Our team will review it and update you shortly.",
-                order.ReplacementReason);
-
-            return new UpdateOrderStatusResponseDto
-            {
-                OrderStatus = order.OrderStatus.ToString(),
-                Message = "Replacement request submitted"
-            };
-        }
 
         private OrderDetailsResponseDto MapOrderToDetailsDto(Order order)
         {
@@ -470,6 +512,7 @@ namespace Ecommerce.Application.Services.Orders
                 TotalPrice = order.TotalPrice,
                 OrderStatus = order.OrderStatus.ToString(),
                 TransactionId = order.TransactionId,
+                UserEmail = order.User?.Email,
                 PaymentMethod = order.PaymentMethod,
                 CancellationReason = order.CancellationReason,
                 ReturnReason = order.ReturnReason,

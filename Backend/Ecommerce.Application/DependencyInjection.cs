@@ -25,6 +25,7 @@ namespace Ecommerce.Application
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAddressService, AddressService>();
             services.AddScoped<IUserManagementService, UserManagementService>();
+            services.AddScoped<Ecommerce.Application.Interfaces.Admin.IDashboardService, Ecommerce.Application.Services.Admin.DashboardService>();
 
             // Catalog Services
             services.AddScoped<ICategoryService, CategoryService>();

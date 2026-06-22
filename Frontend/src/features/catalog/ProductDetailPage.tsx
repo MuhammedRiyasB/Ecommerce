@@ -28,6 +28,7 @@ const ProductDetailPage: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState('');
   const [pincode, setPincode] = useState('');
   const [pincodeStatus, setPincodeStatus] = useState<'idle' | 'invalid' | 'valid'>('idle');
+  const [quantity, setQuantity] = useState(1);
   const [hasAddedToBag, setHasAddedToBag] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ size?: string; color?: string; pincode?: string }>({});
   const [addToCartServer, { isLoading: isAddingToBag }] = useAddToCartMutation();
@@ -36,7 +37,7 @@ const ProductDetailPage: React.FC = () => {
   const pincodeSectionRef = useRef<HTMLDivElement | null>(null);
 
   const { data: relatedProducts } = useGetProductsByCategoryQuery(
-    { categoryId: product?.categoryId || 0, pageSize: 4 },
+    { categoryId: product?.categoryId || 0, pageSize: 10 },
     { skip: !product?.categoryId }
   );
 
@@ -75,7 +76,12 @@ const ProductDetailPage: React.FC = () => {
 
   useEffect(() => {
     setHasAddedToBag(false);
-  }, [selectedColor, selectedSize, pincode, product?.id]);
+    setSelectedColor('');
+    setSelectedSize('');
+    setFieldErrors({});
+    setPincodeStatus('idle');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [product?.id]);
 
   useEffect(() => {
     if (colorOptions.length === 1 && !selectedColor) {
@@ -190,7 +196,7 @@ const ProductDetailPage: React.FC = () => {
         await addToCartServer({
           productId: product.id,
           productVariantId: selectedVariant.id,
-          quantity: 1,
+          quantity,
           deliveryPincode: pincode,
         }).unwrap();
         setHasAddedToBag(true);
@@ -207,6 +213,7 @@ const ProductDetailPage: React.FC = () => {
       selectedSize,
       selectedColor,
       deliveryPincode: pincode,
+      quantity,
     }));
     setHasAddedToBag(true);
     toast.success('Added to bag');
@@ -372,7 +379,26 @@ const ProductDetailPage: React.FC = () => {
               {fieldErrors.size && <p className="mt-2 text-sm font-medium text-red-600">{fieldErrors.size}</p>}
             </div>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <div className="flex h-[52px] w-32 items-center justify-between border border-[#d8cdbb]">
+                <button
+                  type="button"
+                  disabled={quantity <= 1 || isAddingToBag}
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="grid h-full w-10 place-items-center text-[#111827] transition-colors hover:bg-[#fbfaf7] disabled:opacity-50"
+                >
+                  -
+                </button>
+                <span className="text-sm font-bold text-[#111827]">{quantity}</span>
+                <button
+                  type="button"
+                  disabled={Boolean(selectedVariant) && quantity >= selectedVariant!.quantity || isAddingToBag}
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="grid h-full w-10 place-items-center text-[#111827] transition-colors hover:bg-[#fbfaf7] disabled:opacity-50"
+                >
+                  +
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={hasAddedToBag ? handleBuyNow : handleAddToBag}
@@ -394,7 +420,7 @@ const ProductDetailPage: React.FC = () => {
                 <WishlistHeartButton
                   productId={product.id}
                   size="md"
-                  className="grid h-[52px] w-full place-items-center border border-[#d8cdbb] text-[#111827] hover:border-[#9d731e] sm:w-14"
+                  className="grid h-[52px] w-[52px] place-items-center border border-[#d8cdbb] text-[#111827] hover:border-[#9d731e]"
                 />
               )}
             </div>
@@ -490,8 +516,8 @@ const ProductDetailPage: React.FC = () => {
             <p className="mt-3 leading-6">Pincode is checked before adding to bag and rechecked during checkout.</p>
           </div>
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#111827]">Returns</p>
-            <p className="mt-3 leading-6">Eligible products can be returned from the order details page after delivery.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#111827]">No Returns/Replacements</p>
+            <p className="mt-3 leading-6">Our platform policy does not provide any return or replacement options once delivered.</p>
           </div>
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#111827]">Support</p>

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useGetProductsQuery, useGetCategoriesQuery, type Category } from './catalogApiSlice';
 import ProductCard from './components/ProductCard';
-import { ChevronDown, Filter, Grid3X3, SlidersHorizontal, X } from 'lucide-react';
+import { Filter, SlidersHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const flattenCategories = (categories: Category[] = []): Category[] =>
@@ -213,16 +213,7 @@ const ProductListPage: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-[#9d731e]">
-              <Grid3X3 className="h-4 w-4" />
-              <span className="text-[11px] font-black uppercase tracking-[0.2em]">Grid view</span>
-            </div>
-            <button className="inline-flex h-10 items-center gap-2 border border-[#d8cdbb] bg-white px-4 text-[11px] font-black uppercase tracking-[0.2em] text-[#111827]">
-              Sort: Newest
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          </div>
+
         </div>
 
         <div className="grid gap-9 lg:grid-cols-[250px_1fr]">

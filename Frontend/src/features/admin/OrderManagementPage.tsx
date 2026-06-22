@@ -1,9 +1,16 @@
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useChangeOrderStatusMutation, useGetAllOrdersQuery } from './adminApiSlice';
 import { toast } from 'react-toastify';
 import { CheckCircle, Clock, Package, Search, Truck, XCircle } from 'lucide-react';
 
-const statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+const getAvailableStatuses = (currentStatus: string) => {
+  const normalized = currentStatus.toLowerCase();
+  if (normalized === 'pending') return ['Pending', 'Processing', 'Shipped'];
+  if (normalized === 'processing') return ['Processing', 'Shipped'];
+  if (normalized === 'shipped') return ['Shipped', 'Delivered'];
+  return [currentStatus]; // Delivered and Cancelled are terminal
+};
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -29,16 +36,29 @@ const statusIcons: Record<string, typeof Clock> = {
 };
 
 const OrderManagementPage = () => {
+  const [searchParams] = useSearchParams();
+  const statusParam = searchParams.get('status') || undefined;
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
-  const { data, isLoading } = useGetAllOrdersQuery({ pageNumber: page, pageSize: 10 });
+  const { data, isLoading } = useGetAllOrdersQuery({ 
+    pageNumber: page, 
+    pageSize: 10,
+    status: statusParam 
+  });
   const [changeStatus, { isLoading: isUpdating }] = useChangeOrderStatusMutation();
 
   const filteredItems =
-    data?.items?.filter((order) =>
-      `${order.transactionId || ''} ${order.orderId}`.toLowerCase().includes(search.toLowerCase())
-    ) || [];
+    data?.items?.filter((order) => {
+      const searchLower = search.toLowerCase();
+      const transactionIdMatch = (order.transactionId || '').toLowerCase().includes(searchLower);
+      const orderIdMatch = order.orderId.toLowerCase().includes(searchLower);
+      const customerNameMatch = (order.address?.fullName || '').toLowerCase().includes(searchLower);
+      const emailMatch = (order.userEmail || '').toLowerCase().includes(searchLower);
+
+      return transactionIdMatch || orderIdMatch || customerNameMatch || emailMatch;
+    }) || [];
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
@@ -53,7 +73,9 @@ const OrderManagementPage = () => {
     <div className="space-y-6">
       <div>
         <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#9d731e]">Fulfilment desk</p>
-        <h2 className="mt-2 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">Orders</h2>
+        <h2 className="mt-2 text-3xl font-black uppercase tracking-[0.08em] text-[#111827]">
+          {statusParam ? `${statusParam} Orders` : 'Orders'}
+        </h2>
         <p className="mt-2 text-sm text-[#6f6659]">Track payment references, customer delivery details, and shipment status changes.</p>
       </div>
 
@@ -63,7 +85,7 @@ const OrderManagementPage = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8174]" />
             <input
               type="search"
-              placeholder="Search order or transaction ID..."
+              placeholder="Search order ID, transaction ID, customer name, or email..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-11 w-full border border-[#d8cdbb] bg-white pl-10 pr-3 text-sm outline-none focus:border-[#9d731e]"
@@ -99,15 +121,17 @@ const OrderManagementPage = () => {
                     return (
                       <tr key={order.orderId} className="transition-colors hover:bg-[#fbfaf7]">
                         <td className="px-5 py-4">
-                          <p className="font-mono text-xs font-bold text-[#111827]">{order.transactionId || order.orderId.slice(0, 8)}</p>
-                          <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
+                          <Link to={`/admin/orders/${order.orderId}`} className="block hover:opacity-80">
+                            <p className="font-mono text-xs font-bold text-[#111827] hover:underline hover:text-[#9d731e]">{order.transactionId || order.orderId.slice(0, 8)}</p>
+                            <p className="mt-1 text-xs text-[#7c7467]">{new Date(order.orderDate).toLocaleString()}</p>
+                          </Link>
                         </td>
                         <td className="px-5 py-4">
                           <p className="text-sm font-bold text-[#111827]">
-                            {order.address?.firstName || 'Customer'} {order.address?.lastName || ''}
+                            {order.address?.fullName || 'Customer'}
                           </p>
                           <p className="mt-1 text-xs text-[#7c7467]">
-                            {[order.address?.city, order.address?.country].filter(Boolean).join(', ') || 'Address unavailable'}
+                            {order.userEmail || 'Email unavailable'}
                           </p>
                         </td>
                         <td className="px-5 py-4">
@@ -122,12 +146,12 @@ const OrderManagementPage = () => {
                         </td>
                         <td className="px-5 py-4">
                           <select
-                            disabled={isUpdating}
+                            disabled={isUpdating || normalizedStatus === 'delivered' || normalizedStatus === 'cancelled'}
                             value={order.orderStatus}
                             onChange={(event) => handleStatusChange(order.orderId, event.target.value)}
-                            className="h-10 border border-[#d8cdbb] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#9d731e] disabled:opacity-50"
+                            className="h-10 border border-[#d8cdbb] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-[#9d731e] disabled:opacity-50 disabled:bg-gray-50"
                           >
-                            {statuses.map((status) => (
+                            {getAvailableStatuses(order.orderStatus).map((status) => (
                               <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
@@ -145,10 +169,11 @@ const OrderManagementPage = () => {
           </div>
         )}
 
-        {data && data.totalCount > 10 && (
+        {data && data.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-[#eee6da] bg-[#fbfaf7] px-5 py-4">
             <p className="text-sm text-[#6f6659]">
-              Page <span className="font-bold text-[#111827]">{data.pageNumber}</span>
+              Page <span className="font-bold text-[#111827]">{data.pageNumber}</span> of{' '}
+              <span className="font-bold text-[#111827]">{data.totalPages}</span>
             </p>
             <div className="flex gap-2">
               <button
@@ -159,7 +184,7 @@ const OrderManagementPage = () => {
                 Previous
               </button>
               <button
-                disabled={data.items.length < data.pageSize}
+                disabled={page === data.totalPages}
                 onClick={() => setPage((value) => value + 1)}
                 className="h-9 border border-[#d8cdbb] bg-white px-4 text-xs font-bold uppercase tracking-[0.16em] disabled:opacity-40"
               >

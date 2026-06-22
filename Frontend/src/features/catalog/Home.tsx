@@ -50,12 +50,12 @@ const Home: React.FC = () => {
 
   const formalCategoryProduct = products.find((product) => {
     const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('formal') || name.includes('shirt') || name.includes('trouser') || name.includes('blazer');
+    return name.includes('shirt') && !name.includes('t-shirt') || name.includes('trouser') || name.includes('jacket');
   });
 
   const occasionCategoryProduct = products.find((product) => {
     const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('occasion') || name.includes('wedding') || name.includes('suit') || name.includes('ethnic');
+    return name.includes('t-shirt') || name.includes('hoodie') || name.includes('sweatwear') || name.includes('jacket') || name.includes('jeans') || name.includes('cargo pant') || name.includes('jogger') || name.includes('short') || name.includes('trunck') || name.includes('boxer') || name.includes('vest') || name.includes('sweatshirt');
   });
 
   const categoryImageMap = useMemo(() => {

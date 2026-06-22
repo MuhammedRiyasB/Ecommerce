@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Package, CreditCard, CheckCircle, Circle, RefreshCw, RotateCcw, XCircle } from 'lucide-react';
+import { ArrowLeft, Package, CreditCard, CheckCircle, Circle, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { useCancelOrderMutation, useGetOrderByIdQuery, useRequestReplacementMutation, useRequestReturnMutation } from './orderApiSlice';
+import { useCancelOrderMutation, useGetOrderByIdQuery } from './orderApiSlice';
 
 const trackingSteps = ['Pending', 'Processing', 'Shipped', 'Delivered'];
 
@@ -10,8 +10,6 @@ const OrderDetailPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const { data: order, isLoading, isError } = useGetOrderByIdQuery(orderId || '');
   const [cancelOrder, { isLoading: isCancelling }] = useCancelOrderMutation();
-  const [requestReturn, { isLoading: isReturning }] = useRequestReturnMutation();
-  const [requestReplacement, { isLoading: isReplacing }] = useRequestReplacementMutation();
   const [reason, setReason] = useState('');
 
   const activeStepIndex = useMemo(() => {
@@ -37,8 +35,6 @@ const OrderDetailPage: React.FC = () => {
   }
 
   const canCancel = ['pending', 'processing'].includes(order.orderStatus.toLowerCase());
-  const canReturn = order.orderStatus.toLowerCase() === 'delivered';
-  const canReplace = order.orderStatus.toLowerCase() === 'delivered';
 
   const handleCancel = async () => {
     if (!reason.trim()) {
@@ -50,34 +46,12 @@ const OrderDetailPage: React.FC = () => {
     setReason('');
   };
 
-  const handleReturn = async () => {
-    if (!reason.trim()) {
-      toast.error('Add a reason first');
-      return;
-    }
-    await requestReturn({ orderId: order.orderId, reason }).unwrap();
-    toast.success('Return request submitted');
-    setReason('');
-  };
-
-  const handleReplacement = async () => {
-    if (!reason.trim()) {
-      toast.error('Add a reason first');
-      return;
-    }
-    await requestReplacement({ orderId: order.orderId, reason }).unwrap();
-    toast.success('Replacement request submitted');
-    setReason('');
-  };
-
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'delivered': return 'text-green-600 bg-green-50 border-green-200';
       case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
       case 'shipped': return 'text-blue-600 bg-blue-50 border-blue-200';
       case 'processing': return 'text-orange-600 bg-orange-50 border-orange-200';
-      case 'returnrequested': return 'text-purple-600 bg-purple-50 border-purple-200';
-      case 'replacementrequested': return 'text-indigo-600 bg-indigo-50 border-indigo-200';
       case 'refunded': return 'text-green-700 bg-green-50 border-green-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
@@ -108,7 +82,7 @@ const OrderDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {(order.cancellationReason || order.returnReason || order.replacementReason || order.cancelledAtUtc || order.returnRequestedAtUtc || order.replacementRequestedAtUtc || order.refundedAtUtc) && (
+        {(order.cancellationReason || order.cancelledAtUtc || order.refundedAtUtc) && (
           <div className="mb-4 border border-gray-100 bg-white p-6">
             <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-gray-900">Service Update</h3>
             <div className="space-y-3 text-sm text-gray-700">
@@ -117,32 +91,10 @@ const OrderDetailPage: React.FC = () => {
                   <span className="font-black text-gray-900">Cancellation reason:</span> {order.cancellationReason}
                 </p>
               )}
-              {order.returnReason && (
-                <p>
-                  <span className="font-black text-gray-900">Return reason:</span> {order.returnReason}
-                </p>
-              )}
-              {order.replacementReason && (
-                <p>
-                  <span className="font-black text-gray-900">Replacement reason:</span> {order.replacementReason}
-                </p>
-              )}
               {order.cancelledAtUtc && (
                 <p>
                   <span className="font-black text-gray-900">Cancelled on:</span>{' '}
                   {new Date(order.cancelledAtUtc).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              )}
-              {order.returnRequestedAtUtc && (
-                <p>
-                  <span className="font-black text-gray-900">Return requested on:</span>{' '}
-                  {new Date(order.returnRequestedAtUtc).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              )}
-              {order.replacementRequestedAtUtc && (
-                <p>
-                  <span className="font-black text-gray-900">Replacement requested on:</span>{' '}
-                  {new Date(order.replacementRequestedAtUtc).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               )}
               {order.refundedAtUtc && (
@@ -155,7 +107,7 @@ const OrderDetailPage: React.FC = () => {
           </div>
         )}
 
-        {!['cancelled', 'returnrequested', 'replacementrequested', 'returned', 'refunded'].includes(order.orderStatus.toLowerCase()) && (
+        {!['cancelled', 'refunded'].includes(order.orderStatus.toLowerCase()) && (
           <div className="mb-4 border border-gray-100 bg-white p-6">
             <h3 className="mb-5 text-xs font-black uppercase tracking-widest text-gray-900">Order Tracking</h3>
             <div className="grid gap-4 sm:grid-cols-4">
@@ -196,7 +148,7 @@ const OrderDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {(canCancel || canReturn || canReplace) && (
+        {canCancel && (
           <div className="mb-4 border border-gray-100 bg-white p-6">
             <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-gray-900">Order Help</h3>
             <textarea
@@ -204,39 +156,17 @@ const OrderDetailPage: React.FC = () => {
               onChange={(event) => setReason(event.target.value)}
               rows={3}
               className="w-full resize-none border border-gray-200 px-3 py-2 text-sm outline-none focus:border-teal-600"
-              placeholder={canCancel ? 'Reason for cancellation' : 'Reason for return or replacement'}
+              placeholder="Reason for cancellation"
             />
             <div className="mt-3 flex gap-3">
-              {canCancel && (
-                <button
-                  onClick={handleCancel}
-                  disabled={isCancelling}
-                  className="inline-flex items-center gap-2 bg-red-600 px-5 py-3 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Cancel Order
-                </button>
-              )}
-              {canReturn && (
-                <button
-                  onClick={handleReturn}
-                  disabled={isReturning}
-                  className="inline-flex items-center gap-2 bg-teal-600 px-5 py-3 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Request Return
-                </button>
-              )}
-              {canReplace && (
-                <button
-                  onClick={handleReplacement}
-                  disabled={isReplacing}
-                  className="inline-flex items-center gap-2 bg-indigo-600 px-5 py-3 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Request Replacement
-                </button>
-              )}
+              <button
+                onClick={handleCancel}
+                disabled={isCancelling}
+                className="inline-flex items-center gap-2 bg-red-600 px-5 py-3 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancel Order
+              </button>
             </div>
           </div>
         )}

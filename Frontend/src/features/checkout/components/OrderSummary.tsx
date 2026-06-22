@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import type { CartResponse } from '@/features/cart/cartApiSlice';
 import type { Address } from '../addressApiSlice';
-import { useRemoveFromCartMutation } from '@/features/cart/cartApiSlice';
+import { useRemoveFromCartMutation, useIncreaseQuantityMutation, useDecreaseQuantityMutation } from '@/features/cart/cartApiSlice';
 import { toast } from 'react-toastify';
 
 interface OrderSummaryProps {
@@ -14,6 +14,8 @@ interface OrderSummaryProps {
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({ cart, address, onBack, onContinue }) => {
   const [removeFromCart] = useRemoveFromCartMutation();
+  const [increaseQuantity, { isLoading: isIncreasing }] = useIncreaseQuantityMutation();
+  const [decreaseQuantity, { isLoading: isDecreasing }] = useDecreaseQuantityMutation();
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const totalMRP = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const totalDiscount = cart.items.reduce((sum, item) => sum + item.discount * item.quantity, 0);
@@ -66,9 +68,32 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ cart, address, onBack, onCo
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-gray-900">{item.productName}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Size: {item.size} | Color: {item.color} | Qty: {item.quantity}
-                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <p className="text-xs text-gray-500">
+                        Size: {item.size} | Color: {item.color}
+                      </p>
+                      <div className="flex h-7 items-center border border-gray-300">
+                        <button
+                          type="button"
+                          disabled={item.quantity <= 1 || isDecreasing}
+                          onClick={() => decreaseQuantity({ cartItemId: item.cartItemId })}
+                          className="flex h-full w-7 items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          -
+                        </button>
+                        <span className="flex h-full min-w-[28px] items-center justify-center text-xs font-medium">
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isIncreasing}
+                          onClick={() => increaseQuantity({ cartItemId: item.cartItemId })}
+                          className="flex h-full w-7 items-center justify-center text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <button
                     type="button"

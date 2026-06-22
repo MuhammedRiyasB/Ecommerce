@@ -22,11 +22,7 @@ export interface Order {
   transactionId: string;
   paymentMethod: string;
   cancellationReason?: string;
-  returnReason?: string;
-  replacementReason?: string;
   cancelledAtUtc?: string;
-  returnRequestedAtUtc?: string;
-  replacementRequestedAtUtc?: string;
   refundedAtUtc?: string;
   address: {
     addressId: string;
@@ -105,30 +101,6 @@ export const orderApiSlice = apiSlice.injectEndpoints({
         { type: 'Order', id: 'LIST' },
       ],
     }),
-
-    requestReturn: builder.mutation<{ orderStatus: string; message: string }, { orderId: string; reason: string }>({
-      query: ({ orderId, reason }) => ({
-        url: `/Order/${orderId}/return`,
-        method: 'POST',
-        body: { reason },
-      }),
-      invalidatesTags: (_result, _error, { orderId }) => [
-        { type: 'Order', id: orderId },
-        { type: 'Order', id: 'LIST' },
-      ],
-    }),
-
-    requestReplacement: builder.mutation<{ orderStatus: string; message: string }, { orderId: string; reason: string }>({
-      query: ({ orderId, reason }) => ({
-        url: `/Order/${orderId}/replacement`,
-        method: 'POST',
-        body: { reason },
-      }),
-      invalidatesTags: (_result, _error, { orderId }) => [
-        { type: 'Order', id: orderId },
-        { type: 'Order', id: 'LIST' },
-      ],
-    }),
   }),
 });
 
@@ -139,6 +111,4 @@ export const {
   useGetUserOrdersQuery,
   useGetOrderByIdQuery,
   useCancelOrderMutation,
-  useRequestReturnMutation,
-  useRequestReplacementMutation,
 } = orderApiSlice;

@@ -174,6 +174,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
 // ===================== Controllers & Swagger =====================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHostedService<Ecommerce.Api.HostedServices.AutoShipBackgroundService>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "Ecommerce API", Version = "v1" });

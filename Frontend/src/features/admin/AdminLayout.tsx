@@ -127,16 +127,6 @@ const AdminLayout = () => {
               </div>
             </div>
 
-            <div className="hidden min-w-0 flex-1 justify-center px-6 xl:flex">
-              <label className="relative w-full max-w-xl">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8174]" />
-                <input
-                  className="h-11 w-full border border-[#d8cdbb] bg-white pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-[#9a9388] focus:border-[#9d731e]"
-                  placeholder="Search orders, products, customers..."
-                />
-              </label>
-            </div>
-
             <div className="flex items-center gap-3">
               <button className="relative grid h-10 w-10 place-items-center border border-[#d8cdbb] bg-white text-[#111827]" aria-label="Notifications">
                 <Bell className="h-5 w-5" />

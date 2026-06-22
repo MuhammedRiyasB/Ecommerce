@@ -20,11 +20,16 @@ namespace Ecommerce.Api.Controllers.Admin
     {
         private readonly IUserManagementService _userManagementService;
         private readonly ICategoryService _categoryService;
+        private readonly Ecommerce.Application.Interfaces.Admin.IDashboardService _dashboardService;
 
-        public AdminController(IUserManagementService userManagementService, ICategoryService categoryService)
+        public AdminController(
+            IUserManagementService userManagementService, 
+            ICategoryService categoryService,
+            Ecommerce.Application.Interfaces.Admin.IDashboardService dashboardService)
         {
             _userManagementService = userManagementService;
             _categoryService = categoryService;
+            _dashboardService = dashboardService;
         }
 
         // ==================== User Management ====================
@@ -39,6 +44,16 @@ namespace Ecommerce.Api.Controllers.Admin
             var isBlocked = await _userManagementService.ToggleUserBlockStatusAsync(userId);
             return Ok(new { message = isBlocked ? "User blocked" : "User unblocked" });
         }
+
+        // ==================== Dashboard ====================
+
+        [HttpGet("dashboard-stats")]
+        public async Task<IActionResult> GetDashboardStats()
+            => Ok(await _dashboardService.GetDashboardStatsAsync());
+
+        [HttpGet("low-stock-products")]
+        public async Task<IActionResult> GetLowStockProducts([FromQuery] int threshold = 10, [FromQuery] int limit = 5)
+            => Ok(await _dashboardService.GetLowStockProductsAsync(threshold, limit));
 
         // ==================== Category Management ====================
 

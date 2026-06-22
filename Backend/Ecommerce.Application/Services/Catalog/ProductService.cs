@@ -667,14 +667,14 @@ namespace Ecommerce.Application.Services.Catalog
                 var slugLower = categorySlug.ToLower();
                 if (slugLower == "formals")
                 {
-                    var formals = new[] { "shirts", "trousers", "jackets" };
+                    var formals = new[] { "shirts", "trousers" };
                     query = query.Where(p => 
                         formals.Contains(p.Category.CategoryName.ToLower()) || 
                         (p.SubCategory != null && formals.Contains(p.SubCategory.CategoryName.ToLower())));
                 }
                 else if (slugLower == "occasional" || slugLower == "occasionwear")
                 {
-                    var occasionwear = new[] { "t-shirts", "hoodies", "sweatwears", "jackets", "jeans", "cargo pants", "joggers", "shorts", "truncks", "boxers", "vests" };
+                    var occasionwear = new[] { "t-shirts", "hoodies", "sweatshirts", "jackets", "jeans", "cargo pants", "joggers", "shorts" };
                     query = query.Where(p => 
                         occasionwear.Contains(p.Category.CategoryName.ToLower()) || 
                         (p.SubCategory != null && occasionwear.Contains(p.SubCategory.CategoryName.ToLower())));

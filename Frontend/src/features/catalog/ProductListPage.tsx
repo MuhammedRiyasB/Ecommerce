@@ -47,6 +47,24 @@ const ProductListPage: React.FC = () => {
     return 'All Products';
   }, [isSale, newArrivals, activeCategory, categorySlug, search]);
 
+  const displayedCategories = useMemo(() => {
+    if (!allCategories.length) return [];
+    
+    const slugLower = categorySlug?.toLowerCase();
+    
+    if (slugLower === 'formals') {
+      const allowed = ['shirts', 'trousers'];
+      return allCategories.filter(c => allowed.includes(c.categoryName.toLowerCase()));
+    }
+    
+    if (slugLower === 'occasional' || slugLower === 'occasionwear') {
+      const allowed = ['t-shirts', 'hoodies', 'sweatshirts', 'jackets', 'jeans', 'cargo pants', 'joggers', 'shorts'];
+      return allCategories.filter(c => allowed.includes(c.categoryName.toLowerCase()));
+    }
+    
+    return allCategories;
+  }, [allCategories, categorySlug]);
+
   // Compute page subtitle
   const pageSubtitle = useMemo(() => {
     if (isSale) return 'Exclusive markdowns on premium menswear. Grab your favourites before they sell out.';
@@ -111,7 +129,7 @@ const ProductListPage: React.FC = () => {
           )}
         </div>
         <div className="grid gap-3">
-          {allCategories.map((category) => (
+          {displayedCategories.map((category) => (
             <label key={category.categoryId} className="flex cursor-pointer items-center gap-3 text-sm font-medium text-[#514b43]">
               <input
                 type="checkbox"

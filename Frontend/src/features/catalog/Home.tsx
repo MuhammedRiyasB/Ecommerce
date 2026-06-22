@@ -17,13 +17,7 @@ type HeroSlide = {
   cta: string;
 };
 
-type PromoCard = {
-  title: string;
-  subtitle: string;
-  image?: string;
-  href: string;
-  tone: string;
-};
+
 
 type HomeDisplayProduct = HomeProductCard;
 
@@ -51,26 +45,6 @@ const Home: React.FC = () => {
   const saleProducts = useMemo(() => products.filter((product) => product.discount > 0), [products]);
   const topSellingProducts = useMemo(() => (topSellingProductsData || []) as HomeProductCard[], [topSellingProductsData]);
 
-  const formalCategoryProduct = products.find((product) => {
-    const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('shirt') && !name.includes('t-shirt') || name.includes('trouser');
-  });
-
-  const occasionCategoryProduct = products.find((product) => {
-    const name = normalize(product.categoryName || product.subCategoryName);
-    return name.includes('t-shirt') || name.includes('hoodie') || name.includes('sweatshirt') || name.includes('jacket') || name.includes('jeans') || name.includes('cargo pant') || name.includes('jogger') || name.includes('short');
-  });
-
-  const categoryImageMap = useMemo(() => {
-    const map = new Map<number, string>();
-    products.forEach((product) => {
-      const image = getProductImage(product);
-      if (image && !map.has(product.categoryId)) {
-        map.set(product.categoryId, image);
-      }
-    });
-    return map;
-  }, [products]);
 
   const heroSlides = useMemo<HeroSlide[]>(() => {
     const slideProducts = products
@@ -132,43 +106,7 @@ const Home: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [heroSlides.length]);
 
-  const promoCards = useMemo<PromoCard[]>(() => {
-    const newest = newArrivalProducts[0];
-    const formalProduct = formalCategoryProduct;
-    const occasionProduct = occasionCategoryProduct;
-    const saleProduct = saleProducts[0];
 
-    return [
-      {
-        title: 'New Arrivals',
-        subtitle: 'Fresh shirts, trousers, and refined wardrobe updates',
-        image: getProductImage(newest),
-        href: '/catalog',
-        tone: 'from-[#111827]/15 via-[#111827]/10 to-[#111827]/86',
-      },
-      {
-        title: 'Formal',
-        subtitle: 'Office-ready tailoring and clean weekday essentials',
-        image: getProductImage(formalProduct) || (formalProduct ? categoryImageMap.get(formalProduct.categoryId) : undefined),
-        href: buildCatalogHref(formalProduct?.categoryId),
-        tone: 'from-[#1f2937]/10 via-[#1f2937]/15 to-[#111827]/88',
-      },
-      {
-        title: 'Occasional',
-        subtitle: 'Sharper pieces for weddings, evenings, and events',
-        image: getProductImage(occasionProduct) || (occasionProduct ? categoryImageMap.get(occasionProduct.categoryId) : undefined),
-        href: buildCatalogHref(occasionProduct?.categoryId),
-        tone: 'from-[#312e24]/10 via-[#312e24]/15 to-[#111827]/88',
-      },
-      {
-        title: 'Sale',
-        subtitle: 'Limited offers on selected premium styles',
-        image: getProductImage(saleProduct),
-        href: '/catalog',
-        tone: 'from-[#3a1f1f]/10 via-[#3a1f1f]/15 to-[#111827]/90',
-      },
-    ];
-  }, [categoryImageMap, formalCategoryProduct, newArrivalProducts, occasionCategoryProduct, saleProducts]);
 
   const productsByCategory = useMemo(() => {
     const grouped = new Map<string, HomeDisplayProduct[]>();
@@ -276,34 +214,7 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      <section className="border-y border-[#e8e0d0] bg-white py-10">
-        <div className="container mx-auto">
-          <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none]">
-            {promoCards.map((card) => (
-              <Link
-                key={card.title}
-                to={card.href}
-                className="group relative h-56 min-w-[280px] flex-1 overflow-hidden bg-[#111827] sm:min-w-[340px] lg:min-w-0"
-              >
-                {card.image ? (
-                  <img
-                    src={card.image}
-                    alt={card.title}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-[#d8cdbb]" />
-                )}
-                <div className={`absolute inset-0 bg-gradient-to-t ${card.tone}`} />
-                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                  <h2 className="text-2xl font-black uppercase tracking-[0.08em]">{card.title}</h2>
-                  <p className="mt-2 max-w-xs text-sm font-medium leading-5 text-[#f2eadc]">{card.subtitle}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       <section className="bg-[#fbfaf7] py-14 sm:py-16">
         <div className="container mx-auto">

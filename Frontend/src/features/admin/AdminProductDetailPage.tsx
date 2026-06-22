@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useGetProductByIdQuery } from '../catalog/catalogApiSlice';
-import { ArrowLeft, Box, CheckCircle, Tag, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -75,10 +75,7 @@ const AdminProductDetailPage: React.FC = () => {
                       <span className="text-sm font-bold text-green-600">-{formatCurrency(product.discount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#7c7467]">Total Sold</span>
-                    <span className="text-sm font-bold text-[#111827]">{product.totalSold} units</span>
-                  </div>
+
                 </div>
               </div>
             </div>

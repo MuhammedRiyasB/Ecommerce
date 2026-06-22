@@ -8,7 +8,6 @@ import {
   LogOut,
   Menu,
   Package,
-  Search,
   ShoppingCart,
   Tags,
   Users,

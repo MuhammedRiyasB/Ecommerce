@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useGetOrderByIdQuery } from '../orders/orderApiSlice';
 import { useChangeOrderStatusMutation } from './adminApiSlice';
 import { toast } from 'react-toastify';
-import { CheckCircle, Clock, Package, Truck, XCircle, ArrowLeft, MapPin, User, Mail, Phone, Calendar } from 'lucide-react';
+import { CheckCircle, Clock, Package, Truck, XCircle, ArrowLeft, MapPin, User, Phone, Calendar } from 'lucide-react';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {

@@ -142,10 +142,58 @@ jobs:
 
             # Request SSL Certificate if it doesn't exist
             if [ ! -d "./certbot/conf/live/urbaniq.ddns.net" ]; then
-              echo "Requesting initial SSL certificate..."
+              echo "SSL certificate not found. Using temporary HTTP-only nginx to complete ACME challenge..."
+
+              # Step 1: Write a temporary HTTP-only nginx config so port 80 works
+              # without crashing on missing SSL cert files
+              mkdir -p ./certbot/www/.well-known/acme-challenge
+              cat > /tmp/nginx-http-only.conf << 'NGINXEOF'
+worker_processes auto;
+events { worker_connections 1024; }
+http {
+    server {
+        listen 80;
+        server_name _;
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+        location / {
+            return 200 'OK';
+            add_header Content-Type text/plain;
+        }
+    }
+}
+NGINXEOF
+
+              # Step 2: Restart nginx with the temporary HTTP-only config
+              sudo docker stop ecommerce-nginx-1 || true
+              sudo docker rm ecommerce-nginx-1 || true
+              sudo docker run -d --name nginx-temp \
+                -p 80:80 \
+                -v "$(pwd)/certbot/www:/var/www/certbot" \
+                -v "/tmp/nginx-http-only.conf:/etc/nginx/nginx.conf:ro" \
+                nginx:alpine
+
+              # Wait for nginx to be ready
+              sleep 3
+
+              # Step 3: Request the SSL certificate
+              echo "Requesting SSL certificate from Let's Encrypt..."
               sudo docker run --rm \
                 -v "$(pwd)/certbot/conf:/etc/letsencrypt" \
                 -v "$(pwd)/certbot/www:/var/www/certbot" \
                 certbot/certbot certonly --webroot -w /var/www/certbot \
-                -d urbaniq.ddns.net --email ${{ secrets.ADMIN_EMAIL }} --agree-tos --no-eff-email --non-interactive --keep-until-expiring
+                -d urbaniq.ddns.net --email ${{ secrets.ADMIN_EMAIL }} --agree-tos --no-eff-email --non-interactive
+
+              # Step 4: Stop temp nginx and restart the full stack with SSL
+              sudo docker stop nginx-temp || true
+              sudo docker rm nginx-temp || true
+              echo "SSL certificate obtained! Restarting full stack with SSL..."
+              if sudo docker compose version &> /dev/null; then
+                sudo docker compose up -d --remove-orphans
+              else
+                sudo docker-compose up -d --remove-orphans
+              fi
+            else
+              echo "SSL certificate already exists. Skipping certificate request."
             fi

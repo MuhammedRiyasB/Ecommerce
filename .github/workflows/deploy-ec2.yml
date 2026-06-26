@@ -147,23 +147,7 @@ jobs:
               # Step 1: Write a temporary HTTP-only nginx config so port 80 works
               # without crashing on missing SSL cert files
               mkdir -p ./certbot/www/.well-known/acme-challenge
-              cat > /tmp/nginx-http-only.conf << 'NGINXEOF'
-worker_processes auto;
-events { worker_connections 1024; }
-http {
-    server {
-        listen 80;
-        server_name _;
-        location /.well-known/acme-challenge/ {
-            root /var/www/certbot;
-        }
-        location / {
-            return 200 'OK';
-            add_header Content-Type text/plain;
-        }
-    }
-}
-NGINXEOF
+              printf 'worker_processes auto;\nevents { worker_connections 1024; }\nhttp {\n    server {\n        listen 80;\n        server_name _;\n        location /.well-known/acme-challenge/ {\n            root /var/www/certbot;\n        }\n        location / {\n            return 200 OK;\n            add_header Content-Type text/plain;\n        }\n    }\n}\n' > /tmp/nginx-http-only.conf
 
               # Step 2: Restart nginx with the temporary HTTP-only config
               sudo docker stop ecommerce-nginx-1 || true

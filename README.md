@@ -553,12 +553,6 @@ npm run test:watch  # Watch mode
 
 <br />
 
-## 📜 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-<br />
-
 ---
 
 <div align="center">
